@@ -872,10 +872,10 @@ steps:
         step.items_total = len(tools)
 
         for tool_def in tools:
-            tool_id = tool_def["id"]
-            # Delete first, then create
+            requested_id = tool_def["id"]
+            # Delete by requested_id first (idempotent), then create
             client.delete(
-                f"{self.kibana_url}/api/agent_builder/tools/{tool_id}",
+                f"{self.kibana_url}/api/agent_builder/tools/{requested_id}",
                 headers=_kibana_headers(self.api_key),
             )
             resp = client.post(
@@ -885,11 +885,17 @@ steps:
             )
             if resp.status_code < 300:
                 step.items_done += 1
-                step.detail = f"Created: {tool_id}"
-                self._created_tool_ids.append(tool_id)
+                # Kibana may assign its own UUID; use whatever it returns
+                try:
+                    actual_id = resp.json().get("id", requested_id)
+                except Exception:
+                    actual_id = requested_id
+                step.detail = f"Created: {actual_id}"
+                self._created_tool_ids.append(actual_id)
+                logger.info("Tool created: requested=%s actual=%s", requested_id, actual_id)
             else:
-                step.detail = f"Failed: {tool_id} (HTTP {resp.status_code})"
-                logger.warning("Tool %s failed: %s", tool_id, resp.text[:200])
+                step.detail = f"Failed: {requested_id} (HTTP {resp.status_code})"
+                logger.warning("Tool %s failed: %s", requested_id, resp.text[:200])
             notify(self.progress)
 
         step.status = "ok" if step.items_done > 0 else "failed"
@@ -908,9 +914,10 @@ steps:
         # Build full system prompt from scenario properties
         system_prompt = self._generate_system_prompt(agent_cfg)
 
-        # Use only tools that were actually created successfully (Bug 4+5 fix)
+        # Use only tools that were actually created successfully
         tool_ids = list(self._created_tool_ids)
         tool_ids.append("platform.core.cases")
+        logger.info("Creating agent %s with tool_ids: %s", agent_id, tool_ids)
 
         agent_body = {
             "id": agent_id,
