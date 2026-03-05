@@ -566,10 +566,28 @@ class ExxonScenario(BaseScenario):
     # ── Kubernetes Clusters ───────────────────────────────────────────────────
 
     @property
-    def k8s_clusters(self) -> list[dict[str, str]]:
+    def k8s_clusters(self) -> list[dict[str, Any]]:
         return [
-            {"name": "openshift-prod", "provider": "azure", "region": "southcentralus", "namespace": "exxon-infrastructure"},
-            {"name": "openshift-dev",  "provider": "azure", "region": "eastus",         "namespace": "exxon-dev"},
+            {
+                "name": "openshift-prod",
+                "provider": "azure",
+                "platform": "azure_aks",
+                "region": "southcentralus",
+                "namespace": "exxon-infrastructure",
+                "zones": ["southcentralus-1", "southcentralus-2", "southcentralus-3"],
+                "os_description": "Red Hat Enterprise Linux CoreOS 4.14",
+                "services": ["api-gateway", "payment-processor", "inventory-service", "openshift-operator"],
+            },
+            {
+                "name": "openshift-dev",
+                "provider": "azure",
+                "platform": "azure_aks",
+                "region": "eastus",
+                "namespace": "exxon-dev",
+                "zones": ["eastus-1", "eastus-2"],
+                "os_description": "Red Hat Enterprise Linux CoreOS 4.14",
+                "services": ["network-monitor", "avd-broker"],
+            },
         ]
 
     # ── Agent Config ──────────────────────────────────────────────────────────
