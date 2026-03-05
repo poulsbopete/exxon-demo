@@ -131,6 +131,7 @@ class ScenarioDeployer:
                 self._deploy_significant_events(client, _notify)
                 self._deploy_data_views(client, _notify)
                 self._deploy_dashboard(client, _notify)
+                self._bootstrap_fault_index(client)
                 self._deploy_alerting(client, _notify)
         except Exception as exc:
             self.progress.error = str(exc)
@@ -1349,6 +1350,37 @@ When the user asks you to fix or remediate this issue, use remediation_action to
 
         notify(self.progress)
 
+    # ── Fault-events data stream bootstrap ────────────────────────────
+
+    def _bootstrap_fault_index(self, client: httpx.Client) -> None:
+        """Ensure logs-fault.events-<ns> data stream exists in Elastic Serverless.
+
+        Serverless only auto-creates logs-*/metrics-*/traces-* streams.  We POST
+        a bootstrap document so the stream is created before alert rules reference it.
+        """
+        import time as _time
+        stream = f"logs-fault.events-{self.ns}"
+        doc = {
+            "@timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S.000Z", _time.gmtime()),
+            "fault.error_type": "__bootstrap__",
+            "fault.channel": 0,
+            "service.name": "fault-emitter",
+            "severity_text": "INFO",
+            "message": "fault-events data stream bootstrap",
+        }
+        resp = client.post(
+            f"{self.elastic_url}/{stream}/_doc",
+            json=doc,
+            headers=_es_headers(self.api_key),
+        )
+        if resp.status_code < 300:
+            logger.info("Bootstrapped data stream: %s", stream)
+        else:
+            logger.warning(
+                "Could not bootstrap %s (HTTP %d): %s",
+                stream, resp.status_code, resp.text[:200],
+            )
+
     # ── Alerting ───────────────────────────────────────────────────────
 
     def _deploy_alerting(self, client: httpx.Client, notify: ProgressCallback):
@@ -1431,7 +1463,7 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                 "params": {
                     "searchType": "esQuery",
                     "esQuery": es_query,
-                    "index": [f"fault-events-{self.ns}"],
+                    "index": [f"logs-fault.events-{self.ns}"],
                     "timeField": "@timestamp",
                     "threshold": [0],
                     "thresholdComparator": ">",

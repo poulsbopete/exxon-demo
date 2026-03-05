@@ -440,7 +440,7 @@ def _emit_fault_logs(inst, channel: int, repeat: int = 3, interval: float = 20.0
         log_messages = ch.get("log_messages", [])
         affected = ch.get("affected_services", [])
         service_name = affected[0] if affected else "fault-emitter"
-        index = f"fault-events-{namespace}"
+        index = f"logs-fault.events-{namespace}"
         headers = {
             "Authorization": f"ApiKey {api_key}",
             "Content-Type": "application/json",
