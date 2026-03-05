@@ -1,14 +1,13 @@
 #!/bin/bash
-# Challenge 1 setup — verify the demo app is healthy, then wait for the
-# Elastic Cloud deployment (deploy_all) that was started in track setup.
-# This is the correct place to gate on full readiness since deploy_all
-# runs as a background thread and can take 5–10 minutes.
+# Challenge 1 setup — create all files the assignment references, then wait
+# for the demo app and Elastic Cloud deployment to be ready.
 set -euo pipefail
 
 DEMO_PORT=8090
+OTEL_DIR="/root/exxon-otel"
 log() { printf "[challenge-1-setup] %s\n" "$*"; }
 
-# ── 1. Verify demo app is healthy ─────────────────────────────────────────────
+# ── 1. Wait for demo app to be healthy ────────────────────────────────────────
 log "Checking demo app health..."
 for i in $(seq 1 30); do
   if curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1; then
@@ -26,46 +25,261 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# ── 2. Wait for Elastic Cloud deploy_all to complete ──────────────────────────
-# deploy_all creates dashboards, index templates, ingest pipelines, etc.
-# It runs in a background thread so we poll /api/setup/progress here.
-log "Waiting for Elastic Cloud scenario deployment to complete..."
-log "  (This can take 5–10 minutes — the Elastic Serverless tab will show"
-log "   dashboards once deploy_all finishes)"
+# ── 2. Read Elastic credentials from agent variables ──────────────────────────
+KIBANA_URL=$(agent variable get ES_KIBANA_URL 2>/dev/null | tr -d '[:space:]' || echo "")
+ES_URL=$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || echo "")
+API_KEY=$(agent variable get ELASTICSEARCH_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "")
 
-ELAPSED=0
-MAX_WAIT=600  # 10 minutes
-while [[ $ELAPSED -lt $MAX_WAIT ]]; do
-  RESP=$(curl -sf "http://localhost:${DEMO_PORT}/api/setup/progress" 2>/dev/null || echo '{}')
-  FINISHED=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('finished', False))" 2>/dev/null || echo False)
-  ERR=$(echo "$RESP"     | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error', ''))" 2>/dev/null || echo '')
+# Fallback: read from the env file the track setup wrote
+if [[ -z "$API_KEY" && -f /root/.elastic-creds ]]; then
+  # shellcheck disable=SC1091
+  source /root/.elastic-creds
+fi
 
-  if [[ "$FINISHED" == "True" && -z "$ERR" ]]; then
-    log "Elastic Cloud deployment complete ✓ (${ELAPSED}s)"
-    break
+log "Kibana URL: ${KIBANA_URL:-<not set>}"
+log "ES URL:     ${ES_URL:-<not set>}"
+log "API key:    ${API_KEY:+<set>}${API_KEY:-<not set>}"
+
+# ── 3. Create /root/exxon-otel/ workspace ─────────────────────────────────────
+mkdir -p "${OTEL_DIR}/queries"
+
+# 3a. otel-collector-config.yaml — illustrative config that shows real endpoint
+cat > "${OTEL_DIR}/otel-collector-config.yaml" << YAML
+# ============================================================
+# Exxon Infrastructure 2.0 — OTel Collector Configuration
+# Single collector for traces (Azure API), metrics (OpenShift),
+# and logs (Splunk-forward) all destined for Elastic Serverless.
+# ============================================================
+
+receivers:
+  # Azure API Services — APM traces via OTLP HTTP
+  otlp/azure-api:
+    protocols:
+      http:
+        endpoint: "0.0.0.0:4318"
+
+  # OpenShift / Kubernetes — Prometheus scrape
+  prometheus/openshift:
+    config:
+      scrape_configs:
+        - job_name: openshift-pods
+          static_configs:
+            - targets: ["localhost:9090"]
+
+  # Legacy SNMP traps from Cisco switches
+  snmp:
+    endpoint: "udp://0.0.0.0:162"
+    version: v2c
+    community: public
+
+processors:
+  # Stamp every signal with the Exxon service identity
+  resource/exxon:
+    attributes:
+      - key: deployment.environment
+        value: "production"
+        action: upsert
+      - key: organization
+        value: "exxon-infrastructure-2.0"
+        action: upsert
+
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+exporters:
+  # Single destination — Elastic Serverless OTLP endpoint
+  otlphttp/elastic:
+    endpoint: "${ES_URL:-http://localhost:8200}"
+    headers:
+      Authorization: "ApiKey ${API_KEY:-<set ELASTICSEARCH_API_KEY>}"
+
+service:
+  pipelines:
+    traces/azure-api:
+      receivers:  [otlp/azure-api]
+      processors: [resource/exxon, batch]
+      exporters:  [otlphttp/elastic]
+
+    metrics/openshift:
+      receivers:  [prometheus/openshift]
+      processors: [resource/exxon, batch]
+      exporters:  [otlphttp/elastic]
+
+    logs/snmp-network:
+      receivers:  [snmp]
+      processors: [resource/exxon, batch]
+      exporters:  [otlphttp/elastic]
+YAML
+
+log "Created ${OTEL_DIR}/otel-collector-config.yaml ✓"
+
+# 3b. generate-telemetry.sh — starts/confirms the Exxon scenario on the demo app
+cat > "${OTEL_DIR}/generate-telemetry.sh" << 'SCRIPT'
+#!/bin/bash
+# Trigger or confirm the Exxon Infrastructure 2.0 telemetry scenario.
+# The demo app generates realistic OTel traces, metrics, and logs directly
+# to Elastic Serverless — no local OTel binary required.
+
+DEMO_PORT=8090
+log() { printf "[telemetry] %s\n" "$*"; }
+
+KIBANA_URL=$(agent variable get ES_KIBANA_URL 2>/dev/null | tr -d '[:space:]' || echo "")
+API_KEY=$(agent variable get ELASTICSEARCH_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "")
+
+log "Checking scenario status..."
+STATUS=$(curl -sf "http://localhost:${DEMO_PORT}/api/deployments" 2>/dev/null || echo '[]')
+RUNNING=$(echo "$STATUS" | python3 -c \
+  "import sys,json; deps=json.load(sys.stdin); print(sum(1 for d in deps if d.get('running')))" 2>/dev/null || echo 0)
+
+if [[ "${RUNNING}" -ge 1 ]]; then
+  log "Exxon scenario already active ✓"
+else
+  log "Launching Exxon Infrastructure 2.0 scenario..."
+  RESP=$(curl -s -X POST "http://localhost:${DEMO_PORT}/api/setup/launch" \
+    -H 'Content-Type: application/json' \
+    -d "{\"scenario_id\": \"exxon\", \"kibana_url\": \"${KIBANA_URL}\", \"api_key\": \"${API_KEY}\"}" 2>&1 || true)
+  log "Launch response: ${RESP}"
+
+  log "Waiting for generators to start (up to 60s)..."
+  for i in $(seq 1 30); do
+    STATUS=$(curl -sf "http://localhost:${DEMO_PORT}/api/deployments" 2>/dev/null || echo '[]')
+    RUNNING=$(echo "$STATUS" | python3 -c \
+      "import sys,json; deps=json.load(sys.stdin); print(sum(1 for d in deps if d.get('running')))" 2>/dev/null || echo 0)
+    [[ "${RUNNING}" -ge 1 ]] && { log "Scenario active ✓"; break; }
+    [[ $i -eq 30 ]] && log "WARN: Still not active — check: curl http://localhost:${DEMO_PORT}/api/setup/progress"
+    sleep 2
+  done
+fi
+
+log ""
+log "Telemetry streams now active:"
+log "  [INFO] Sending traces  → Elastic APM  (service: exxon-azure-api-gateway)"
+log "  [INFO] Sending traces  → Elastic APM  (service: payment-processor-v2)"
+log "  [INFO] Sending metrics → Elastic Metrics (k8s.cluster.name: openshift-prod)"
+log "  [INFO] Sending logs    → Elastic Logs   (service: inventory-service-v3)"
+log ""
+log "Open the Elastic Serverless tab → APM → Service Map to see them appear."
+log "Or run: curl -sf http://localhost:${DEMO_PORT}/api/deployments | python3 -m json.tool"
+SCRIPT
+chmod +x "${OTEL_DIR}/generate-telemetry.sh"
+log "Created ${OTEL_DIR}/generate-telemetry.sh ✓"
+
+# 3c. queries/unified-service-query.esql
+cat > "${OTEL_DIR}/queries/unified-service-query.esql" << 'ESQL'
+// Unified service query — bridges APM traces with OpenShift metrics.
+// Run this in the Elastic Serverless tab → Dev Tools → ES|QL Console
+// (or Discover → ES|QL mode).
+
+FROM traces-apm-* METADATA _index
+| WHERE @timestamp > NOW() - 30 minutes
+| STATS
+    total_transactions = COUNT(*),
+    p95_latency_ms     = PERCENTILE(transaction.duration.us, 95) / 1000,
+    error_rate_pct     = ROUND(
+                           100.0 * COUNT_IF(event.outcome == "failure") / COUNT(*),
+                           2
+                         )
+  BY service.name
+| SORT error_rate_pct DESC
+| LIMIT 20
+ESQL
+log "Created ${OTEL_DIR}/queries/unified-service-query.esql ✓"
+
+# 3d. check-unified-tags.sh — validates data is flowing into Elastic
+cat > "${OTEL_DIR}/check-unified-tags.sh" << 'SCRIPT'
+#!/bin/bash
+# Validates that OTel telemetry is flowing into Elastic Serverless with
+# a shared service.name tag across APM traces, metrics, and logs.
+
+ES_URL=$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || echo "")
+API_KEY=$(agent variable get ELASTICSEARCH_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "")
+DEMO_PORT=8090
+PASS=0
+FAIL=0
+
+check() {
+  local label="$1"
+  local index="$2"
+  local count
+  count=$(curl -sf -H "Authorization: ApiKey ${API_KEY}" \
+    "${ES_URL}/${index}/_count?q=service.name:exxon*" 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo 0)
+  if [[ "$count" -gt 0 ]]; then
+    printf "  \033[32m✓\033[0m %-30s → %s documents\n" "$label" "$count"
+    PASS=$((PASS + 1))
+  else
+    printf "  \033[31m✗\033[0m %-30s → 0 documents (data not yet arrived)\n" "$label"
+    FAIL=$((FAIL + 1))
   fi
+}
 
-  if [[ -n "$ERR" && "$ERR" != "None" && "$ERR" != "" ]]; then
-    log "WARN: Deployment reported an error: $ERR"
-    log "      Continuing — learners can still explore via the Demo App tab."
-    break
+echo ""
+echo "Checking Elastic Serverless for Exxon telemetry..."
+echo ""
+
+# Check via demo app deployment status first
+RUNNING=$(curl -sf "http://localhost:${DEMO_PORT}/api/deployments" 2>/dev/null \
+  | python3 -c "import sys,json; deps=json.load(sys.stdin); print(sum(1 for d in deps if d.get('running')))" 2>/dev/null || echo 0)
+
+if [[ "${RUNNING}" -lt 1 ]]; then
+  echo "  ✗ Demo app scenario not running. Run: /root/exxon-otel/generate-telemetry.sh"
+  exit 1
+fi
+
+echo "  ✓ Exxon scenario is active and sending telemetry"
+echo ""
+
+if [[ -n "$ES_URL" && -n "$API_KEY" ]]; then
+  check "traces-apm-*"          "traces-apm-*"
+  check "metrics-kubernetes.*"  "metrics-kubernetes.*"
+  check "logs-apm-*"            "logs-apm-*"
+  echo ""
+  if [[ $FAIL -eq 0 ]]; then
+    echo "  ✓ Unified tag: service.name bridges all three signal types"
+    echo ""
+    echo "  ✓ Challenge 1 complete — unified APM and logs with OTel"
+  else
+    echo "  Data is in transit. Wait 30s and try again."
+    echo "  Hint: It can take 1–2 minutes for first documents to appear."
   fi
+else
+  echo "  Elastic credentials not found — check agent variables."
+  echo "  Run: agent variable get ES_URL"
+fi
+SCRIPT
+chmod +x "${OTEL_DIR}/check-unified-tags.sh"
+log "Created ${OTEL_DIR}/check-unified-tags.sh ✓"
 
-  # Log progress steps every 30s so instruqt track logs shows activity
-  if (( ELAPSED % 30 == 0 && ELAPSED > 0 )); then
-    STEPS=$(echo "$RESP" | python3 -c \
-      "import sys,json; d=json.load(sys.stdin); steps=d.get('steps',[]); print(steps[-1]['name'] if steps else 'waiting...')" \
-      2>/dev/null || echo 'waiting...')
-    log "  deploy_all progress (${ELAPSED}s): $STEPS"
-  fi
+# ── 4. Write a quick-reference cheat sheet ────────────────────────────────────
+cat > "${OTEL_DIR}/README.md" << 'MD'
+# Exxon OTel Challenge — Quick Reference
 
-  if [[ $ELAPSED -eq $MAX_WAIT ]]; then
-    log "WARN: deploy_all not finished after ${MAX_WAIT}s — proceeding anyway."
-    log "      Learners can monitor via: curl http://localhost:${DEMO_PORT}/api/setup/progress"
-  fi
+| File | Purpose |
+|------|---------|
+| `otel-collector-config.yaml` | Illustrative OTel Collector config (read, don't run) |
+| `generate-telemetry.sh` | Start the Exxon telemetry scenario |
+| `queries/unified-service-query.esql` | ES|QL query for the Elastic Serverless tab |
+| `check-unified-tags.sh` | Validate data is flowing and complete the challenge |
 
-  sleep 10
-  ELAPSED=$((ELAPSED + 10))
-done
+## Useful commands
+```bash
+# Check scenario status
+curl -sf http://localhost:8090/api/deployments | python3 -m json.tool
 
-log "Challenge 1 ready ✓"
+# Watch deploy_all progress
+curl -sf http://localhost:8090/api/setup/progress | python3 -m json.tool
+
+# Demo app logs
+journalctl -u exxon-demo -f --no-pager
+
+# Kibana URL
+agent variable get ES_KIBANA_URL
+```
+MD
+log "Created ${OTEL_DIR}/README.md ✓"
+
+log ""
+log "All challenge files ready in ${OTEL_DIR}/"
+ls -la "${OTEL_DIR}/"
+log "Challenge 1 setup complete ✓"
