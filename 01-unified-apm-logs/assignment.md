@@ -171,11 +171,16 @@ alerting engine.
 ### Streams
 
 Navigate to **Streams** (under Observability in the left nav). You will see
-the Wired Streams automatically routing OTLP signals:
+the Wired Streams automatically routing OTLP signals — look for:
 
-- `logs` — application and SNMP logs
-- `traces-apm-*` — distributed traces from Azure API services
-- `metrics-*` — OpenShift pod and node metrics
+- `logs.otel` — application logs from Azure API services
+- `traces-generic.otel-default` — distributed traces from Azure API services
+- `metrics-generic.otel-default` — host and service metrics
+- `metrics-kubernetes.container.otel-default` — OpenShift pod and container metrics
+
+> These stream names are auto-created by Elastic Serverless when your
+> OTLP data lands. No pipeline code, no index templates — Elastic routes
+> each signal type automatically.
 
 Click any stream → **"Query with ES|QL"** to explore live telemetry.
 
