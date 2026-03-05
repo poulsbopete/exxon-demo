@@ -79,19 +79,19 @@ notes:
     For Exxon's estate of **hundreds of Cisco devices**, this eliminates
     an entire tool and its operational overhead.
 tabs:
-- id: 5hcn3kt9phei
+- id: qiepitwglmmp
   title: Demo App
   type: service
   hostname: es3-api
   path: /
   port: 8090
-- id: ch2faultinject
+- id: r3qjz8amhnjc
   title: Fault Injection
   type: service
   hostname: es3-api
   path: /chaos?deployment_id=exxon
   port: 8090
-- id: tpgjkiktcvye
+- id: xc2i7kyk4vty
   title: Elastic Serverless
   type: service
   hostname: es3-api
@@ -210,7 +210,7 @@ page the WAN team and the app team simultaneously from one platform.
 
 ## Step 4 — Ask the AI Agent
 
-Navigate to **AI Agent** (search "Agent Builder") and ask the
+In the **left navigation**, click **AI Agent** (not the chat bubble icon in the top bar — that is the legacy AI Assistant). Ask the
 **exxon-infrastructure-analyst**:
 
 > *"Show me the SNMP circuit flap events and which application services

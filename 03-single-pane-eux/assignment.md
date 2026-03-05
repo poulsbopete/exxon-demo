@@ -70,13 +70,13 @@ notes:
     accessible to every team, from the NOC to the CISO, without
     extra tool licenses or per-seat costs.
 tabs:
-- id: 5hcn3kt9phei
+- id: 2rwz8loyldqp
   title: Demo App
   type: service
   hostname: es3-api
   path: /
   port: 8090
-- id: ch3faultinject
+- id: 1z4wudkzrort
   title: Fault Injection
   type: service
   hostname: es3-api
@@ -173,7 +173,7 @@ Look at the timeline and identify the spike window. The dashboard shows:
 
 ## Step 3 — Ask the AI Agent
 
-Navigate to **AI Agent** (search "Agent Builder") and open the
+In the **left navigation**, click **AI Agent** (not the chat bubble icon in the top bar — that is the legacy AI Assistant). Open the
 **exxon-infrastructure-analyst** agent.
 
 Ask the following questions to walk through the root cause investigation:
