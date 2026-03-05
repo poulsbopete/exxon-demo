@@ -1,0 +1,3 @@
+#!/bin/sh
+# Cleanup runs when the challenge ends or the user moves to the next challenge.
+exit 0

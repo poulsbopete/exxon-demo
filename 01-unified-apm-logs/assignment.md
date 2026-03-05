@@ -1,3 +1,48 @@
+---
+slug: unified-apm-logs
+id: 5las0ca0droc
+type: challenge
+title: 'Challenge 1: Unifying Modern APM and Logs with OTel'
+teaser: Replace fragmented Datadog/Splunk pipelines with native OpenTelemetry ingest
+  into Elastic Serverless — bridging 1,000 Azure API service instances and OpenShift
+  Kubernetes in one query.
+notes:
+- type: text
+  contents: |
+    Exxon runs **1,000 application instances** in Azure API Services, each
+    emitting traces and metrics. Today these land in Datadog (traces) and
+    Splunk (logs) — two tools with no common service identity.
+
+    Log pipelines in Datadog are **failing to create**, and the OTel
+    collector configurations that were meant to fix this are orphaned —
+    "nobody knows what to do with OpenTelemetry."
+
+    Elastic Serverless accepts the **OpenTelemetry Line Protocol (OTLP)**
+    natively over HTTP with zero pipeline code.
+- type: text
+  contents: |
+    **Elastic Serverless OTLP Endpoint** accepts logs, metrics, and traces
+    in a single ingest path — no Logstash pipelines, no custom index
+    templates, no per-team Datadog dashboards to maintain.
+
+    The `service.name` resource attribute from OTel becomes the unifying
+    key across APM traces (`traces-apm-*`), infrastructure metrics
+    (`metrics-*`), and application logs (`logs-*`).
+tabs:
+- id: kqqkx35h6hrw
+  title: Terminal
+  type: terminal
+  hostname: shell
+- id: frdodbopbyyv
+  title: Editor
+  type: code
+  hostname: shell
+  path: /root/exxon-otel
+difficulty: basic
+timelimit: 1800
+enhanced_loading: null
+---
+
 # Challenge 1: Unifying Modern APM and Logs with OTel
 
 ## The Situation

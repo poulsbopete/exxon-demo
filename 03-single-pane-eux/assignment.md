@@ -1,3 +1,50 @@
+---
+slug: single-pane-eux
+id: pwr2sckdx9nb
+type: challenge
+title: 'Challenge 3: The Single Pane of Glass for End-User Experience'
+teaser: Answer Exxon's critical question — "How is the machine functioning for the
+  user?" — by investigating an Azure Virtual Desktop issue spanning iboss connections,
+  AppGate Zero Trust, and Windows event logs in one unified Elastic dashboard.
+notes:
+- type: text
+  contents: |
+    Exxon manages **hundreds of Azure Virtual Desktop (AVD) sessions** for
+    field engineers. Desktop reliability is measured by three teams in three
+    tools — ThousandEyes (WAN), AppGate / iboss (Security), Windows Event
+    Logs (Desktop). When a user reports "my desktop is slow," nobody has a
+    single view.
+
+    The question "Is this AWS fallback latency, Jitter DNS from the WAN
+    team, or an AppGate policy block?" takes hours of cross-team Slack
+    threads to answer.
+- type: text
+  contents: |
+    **`user.name`** and **`host.name`** serve as universal join keys across
+    AVD metrics, Windows events, iboss connection logs, AppGate audit logs,
+    and ThousandEyes circuit data — no custom joins required. One ES|QL
+    query, five data streams, five minutes to root cause.
+tabs:
+- id: amrpqgmy5wvf
+  title: Terminal
+  type: terminal
+  hostname: shell
+- id: n8romw6stvqw
+  title: Editor
+  type: code
+  hostname: shell
+  path: /root/exxon-eux
+- id: mrilphzzwkcj
+  title: Dashboard
+  type: service
+  hostname: shell
+  path: /dashboard
+  port: 5601
+difficulty: intermediate
+timelimit: 2700
+enhanced_loading: null
+---
+
 # Challenge 3: The Single Pane of Glass for End-User Experience
 
 ## The Situation

@@ -1,3 +1,43 @@
+---
+slug: legacy-snmp-network
+id: h5f8ewkl75xh
+type: challenge
+title: 'Challenge 2: Taming Legacy Network Infrastructure (SNMP)'
+teaser: Stop treating Cisco SNMP traps as an island. Ingest legacy SNMP v2c traps
+  and enrich them with ServiceNow CMDB data so network events show up in the same
+  Elastic platform as your modern APM.
+notes:
+- type: text
+  contents: |
+    Exxon's network team monitors Cisco switches and routers via **OpenNMS**
+    receiving SNMP v2c traps and polling MIB OIDs. These network events —
+    link flaps, interface errors, BGP state changes — are completely
+    invisible to the application teams watching Datadog.
+
+    ThousandEyes agents on Cisco switches provide circuit-level visibility,
+    but again in isolation. When a circuit flaps, the WAN team knows, but
+    the app team doesn't — "it's very disjointed."
+- type: text
+  contents: |
+    The **Elastic Network SNMP integration** listens for UDP SNMP traps and
+    translates OID values into human-readable field names using bundled MIB
+    files. **Runtime fields** and **enrich policies** let you join incoming
+    trap data with a ServiceNow CMDB index at query time — no ETL required.
+tabs:
+- id: jirc1uxyauuo
+  title: Terminal
+  type: terminal
+  hostname: shell
+- id: z2xahnnwglgi
+  title: Editor
+  type: code
+  hostname: shell
+  path: /root/exxon-snmp
+difficulty: intermediate
+timelimit: 2400
+enhanced_loading: null
+---
+
 # Challenge 2: Taming Legacy Network Infrastructure (SNMP)
 
 ## The Situation

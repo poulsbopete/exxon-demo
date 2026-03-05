@@ -1,0 +1,3 @@
+#!/bin/sh
+# Solve runs when the user clicks "Skip" — auto-completes the challenge.
+exit 0
