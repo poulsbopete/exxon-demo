@@ -336,7 +336,7 @@ Successful output:
 You have now completed all three challenges:
 
 1. **OTel Unified APM** — Replaced Datadog APM + Splunk log pipelines with
-   native OTel ingest. All 1,000 Azure API service instances visible in one
+   native OTel ingest. All 1,000+ Azure API service instances visible in one
    ES|QL query.
 
 2. **SNMP Network Integration** — Brought Cisco WAN events out of OpenNMS and

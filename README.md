@@ -51,7 +51,7 @@ exxon-demo/
 
 ### Challenge 1: Unifying Modern APM and Logs with OTel (~15 min)
 
-**Narrative:** Exxon's 1,000 Azure API service instances emit traces into
+**Narrative:** Exxon's 1,000+ Azure API service instances emit traces into
 Datadog and logs into Splunk — two tools with no common service identity.
 OTel configs are "orphaned — nobody knows what to do."
 

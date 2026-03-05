@@ -11,7 +11,7 @@ description: |-
   (metrics & APM), Splunk (application logs), OpenNMS (network monitoring),
   and ThousandEyes on Cisco switches — with no single view of how the
   environment affects end users. Log pipelines in Datadog are failing to
-  create, 1,000 Azure API service instances produce "messy" APM data that
+  create, 1,000+ Azure API service instances produce "messy" APM data that
   nobody knows how to act on, and SNMP traps from legacy Cisco infrastructure
   are isolated from modern OpenShift/Kubernetes metrics.
 
@@ -48,5 +48,5 @@ lab_config:
   feedback_tab_enabled: false
   loadingMessages: true
   hideStopButton: false
-checksum: "13110473005646936270"
+checksum: "16583297279560451070"
 enhanced_loading: false

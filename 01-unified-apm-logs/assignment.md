@@ -4,12 +4,12 @@ id: 5las0ca0droc
 type: challenge
 title: 'Challenge 1: Unifying Modern APM and Logs with OTel'
 teaser: Replace fragmented Datadog/Splunk pipelines with native OpenTelemetry ingest
-  into Elastic Serverless — bridging 1,000 Azure API service instances and OpenShift
+  into Elastic Serverless — bridging 1,000+ Azure API service instances and OpenShift
   Kubernetes in one query.
 notes:
 - type: text
   contents: |
-    Exxon runs **1,000 application instances** in Azure API Services, each
+    Exxon runs **1,000+ application instances** in Azure API Services, each
     emitting traces and metrics. Today these land in Datadog (traces) and
     Splunk (logs) — two tools with no common service identity.
 
@@ -64,7 +64,7 @@ enhanced_loading: null
 
 ## The Situation
 
-Your team manages **1,000 Azure API Service instances** — the backbone of
+Your team manages **1,000+ Azure API Service instances** — the backbone of
 Exxon's Infrastructure 2.0 microservices platform. Right now their telemetry
 is split:
 
