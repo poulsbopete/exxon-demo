@@ -217,22 +217,12 @@ if [[ -n "$KIBANA_URL" && -n "$ELASTICSEARCH_API_KEY" ]]; then
         }" 2>&1 || true)
     echo "Launch response: ${LAUNCH_RESP}"
 
-    # Short non-blocking wait — give up after 60s and let learners use Demo App
-    echo "Waiting up to 60s for deployment to register..."
-    for i in $(seq 1 30); do
-        RUNNING=$(curl -sf "http://localhost:${DEMO_PORT}/api/deployments" 2>/dev/null \
-            | python3 -c "import sys,json; deps=json.load(sys.stdin); print(sum(1 for d in deps if d.get('running')))" 2>/dev/null || echo 0)
-        if [[ "${RUNNING}" -ge 1 ]]; then
-            echo "Exxon scenario deployment active after $((i * 2))s ✓"
-            break
-        fi
-        if [[ $i -eq 30 ]]; then
-            echo "WARN: Deployment not yet active after 60s — proceeding anyway."
-            echo "      Learners can start the scenario manually via the Demo App tab."
-            echo "      Check progress: curl -sf http://localhost:${DEMO_PORT}/api/setup/progress"
-        fi
-        sleep 2
-    done
+    # deploy_all runs as a background thread inside the app and can take
+    # 5+ minutes (creating dashboards, index templates, ingest pipelines).
+    # Polling /api/deployments here would block setup needlessly.
+    # Challenge 1's setup-es3-api script waits on /api/setup/progress instead.
+    echo "Exxon scenario deploy_all running in background — track setup complete."
+    echo "Monitor progress: curl -sf http://localhost:${DEMO_PORT}/api/setup/progress"
 else
     echo "WARN: Missing Kibana URL or API key — learners can launch manually via Demo App tab"
 fi

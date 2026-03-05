@@ -1,26 +1,71 @@
 #!/bin/bash
-# Challenge setup — the Elastic project, nginx, and demo app were already
-# started by track_scripts/setup-es3-api. Just verify everything is healthy.
+# Challenge 1 setup — verify the demo app is healthy, then wait for the
+# Elastic Cloud deployment (deploy_all) that was started in track setup.
+# This is the correct place to gate on full readiness since deploy_all
+# runs as a background thread and can take 5–10 minutes.
 set -euo pipefail
 
 DEMO_PORT=8090
-log() { printf "[challenge-setup] %s\n" "$*"; }
+log() { printf "[challenge-1-setup] %s\n" "$*"; }
 
+# ── 1. Verify demo app is healthy ─────────────────────────────────────────────
+log "Checking demo app health..."
 for i in $(seq 1 30); do
   if curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1; then
     log "Demo app healthy ✓"
-    exit 0
+    break
   fi
+  [[ $i -eq 30 ]] && {
+    log "App not responding — attempting restart..."
+    systemctl restart exxon-demo
+    sleep 8
+    curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1 \
+      || { log "ERROR: App still not healthy. Run: journalctl -u exxon-demo -n 50"; exit 1; }
+    log "Demo app healthy after restart ✓"
+  }
   sleep 2
 done
 
-log "App not responding — attempting restart..."
-systemctl restart exxon-demo
-sleep 5
+# ── 2. Wait for Elastic Cloud deploy_all to complete ──────────────────────────
+# deploy_all creates dashboards, index templates, ingest pipelines, etc.
+# It runs in a background thread so we poll /api/setup/progress here.
+log "Waiting for Elastic Cloud scenario deployment to complete..."
+log "  (This can take 5–10 minutes — the Elastic Serverless tab will show"
+log "   dashboards once deploy_all finishes)"
 
-if curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1; then
-  log "Demo app healthy after restart ✓"
-else
-  log "ERROR: App still not healthy. Run: journalctl -u exxon-demo -n 50"
-  exit 1
-fi
+ELAPSED=0
+MAX_WAIT=600  # 10 minutes
+while [[ $ELAPSED -lt $MAX_WAIT ]]; do
+  RESP=$(curl -sf "http://localhost:${DEMO_PORT}/api/setup/progress" 2>/dev/null || echo '{}')
+  FINISHED=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('finished', False))" 2>/dev/null || echo False)
+  ERR=$(echo "$RESP"     | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('error', ''))" 2>/dev/null || echo '')
+
+  if [[ "$FINISHED" == "True" && -z "$ERR" ]]; then
+    log "Elastic Cloud deployment complete ✓ (${ELAPSED}s)"
+    break
+  fi
+
+  if [[ -n "$ERR" && "$ERR" != "None" && "$ERR" != "" ]]; then
+    log "WARN: Deployment reported an error: $ERR"
+    log "      Continuing — learners can still explore via the Demo App tab."
+    break
+  fi
+
+  # Log progress steps every 30s so instruqt track logs shows activity
+  if (( ELAPSED % 30 == 0 && ELAPSED > 0 )); then
+    STEPS=$(echo "$RESP" | python3 -c \
+      "import sys,json; d=json.load(sys.stdin); steps=d.get('steps',[]); print(steps[-1]['name'] if steps else 'waiting...')" \
+      2>/dev/null || echo 'waiting...')
+    log "  deploy_all progress (${ELAPSED}s): $STEPS"
+  fi
+
+  if [[ $ELAPSED -eq $MAX_WAIT ]]; then
+    log "WARN: deploy_all not finished after ${MAX_WAIT}s — proceeding anyway."
+    log "      Learners can monitor via: curl http://localhost:${DEMO_PORT}/api/setup/progress"
+  fi
+
+  sleep 10
+  ELAPSED=$((ELAPSED + 10))
+done
+
+log "Challenge 1 ready ✓"
