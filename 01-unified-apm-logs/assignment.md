@@ -92,13 +92,15 @@ enhanced_loading: null
 
 ## Step 1 — Open the Demo App
 
-Switch to the **Demo App** tab. You will see the **Exxon Infrastructure 2.0**
-scenario already selected and actively deploying to your Elastic Serverless
-project.
+Switch to the **Demo App** tab. The **Exxon Infrastructure 2.0** scenario is
+already selected and the connection test runs automatically.
 
-Look at the connection status bar:
+Scroll down to the **Connection Settings** panel and look for the green
+status bar:
 
 > **"Connected! Cluster: ... | OTLP OK"**
+
+If the status hasn't appeared yet, click the **Test Connection** button once.
 
 **"OTLP OK"** is the key message. It confirms that Elastic Serverless's
 managed OTLP ingest endpoint is live and accepting telemetry — no APM Server
@@ -173,7 +175,7 @@ Navigate to **Streams** (under Observability in the left nav). You will see
 the Wired Streams automatically routing OTLP signals:
 
 - `logs` — application and SNMP logs
-- `traces-apm-*` — distributed traces from Azure API services  
+- `traces-apm-*` — distributed traces from Azure API services
 - `metrics-*` — OpenShift pod and node metrics
 
 Click any stream → **"Query with ES|QL"** to explore live telemetry.

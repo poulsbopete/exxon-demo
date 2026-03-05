@@ -538,10 +538,14 @@
                 if (keyField && !keyField.value) keyField.value = cfg.api_key;
             }
             if (cfg.scenario_id) {
-                // Pre-select the matching scenario card
+                // Pre-select the matching scenario card, then auto-run connection test
                 setTimeout(() => {
                     const card = document.querySelector(`.scenario-card[data-id="${cfg.scenario_id}"]`);
-                    if (card) card.click();
+                    if (card) {
+                        card.click();
+                        // Run the connection test automatically after the panel opens
+                        setTimeout(() => { if (typeof testConnection === 'function') testConnection(); }, 600);
+                    }
                 }, 300);
             }
         } catch (e) {
