@@ -170,31 +170,33 @@ need the endpoint URL updated.
 
 ---
 
-## Step 2 — Activate the Telemetry Flow
+## Step 2 — Confirm Deployment is Running
 
-The demo app sends OTLP traces, metrics, and logs directly to your Elastic
-Serverless project. Start the flow:
+Switch to the **Demo App** tab. You will see:
+
+- **Exxon Infrastructure 2.0** scenario selected (teal highlight)
+- **Kibana URL** pre-populated with your Elastic Serverless project
+- **"Connected! Cluster: ... | OTLP OK"** — both Elasticsearch and the OTLP
+  ingest endpoint are reachable with your API key
+- **"Deploying..."** button — `deploy_all()` is running in the background,
+  creating dashboards, AI agents, alert rules, and the knowledge base
+
+> **Presenter note:** Point out "OTLP OK" — this confirms Elastic Serverless's
+> managed OTLP ingest endpoint is live and accepting data. No APM Server
+> to deploy, no collector backend to configure on Elastic's side.
+
+Wait for the "Deploying..." status to clear before moving to Step 3.
+You can also monitor from the Terminal:
 
 ```bash
-cd /root/exxon-otel
-./generate-telemetry.sh
+curl -sf http://localhost:8090/api/setup/progress | python3 -m json.tool
 ```
 
-You will see output confirming all three streams are active and going to
-**Elastic Serverless** — not a local process, not a mock endpoint:
+If the scenario isn't running yet, start it:
 
+```bash
+cd /root/exxon-otel && ./generate-telemetry.sh
 ```
-[telemetry] Exxon scenario already active ✓
-[telemetry] Telemetry streams now active:
-[telemetry]   [INFO] Sending traces  → Elastic APM  (service: exxon-azure-api-gateway)
-[telemetry]   [INFO] Sending traces  → Elastic APM  (service: payment-processor-v2)
-[telemetry]   [INFO] Sending metrics → Elastic Metrics (k8s.cluster.name: openshift-prod)
-[telemetry]   [INFO] Sending logs    → Elastic Logs   (service: inventory-service-v3)
-```
-
-> **Presenter note:** This replaces the broken Datadog log pipeline and
-> the disconnected Splunk forwarder. Same OTel instrumentation — new
-> destination. No Logstash. No Splunk HEC. No custom index templates.
 
 ---
 
