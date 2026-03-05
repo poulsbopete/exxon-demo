@@ -1157,6 +1157,48 @@ def _build_dashboard_ndjson(
                 all_refs.append(ref)
                 seen_ref_names.add(ref["name"])
 
+    # ── Bundle data view (index-pattern) objects into the NDJSON ─────────────
+    # Kibana _import requires referenced saved objects to be present in the
+    # same NDJSON OR already exist in Kibana with the exact same IDs.
+    # We bundle them here so the import is fully self-contained and works even
+    # if the Serverless instance hasn't created data views yet.
+
+    data_views = [
+        {
+            "attributes": {
+                "name": f"{scenario_name} Logs",
+                "title": "logs*",
+                "timeFieldName": "@timestamp",
+                "allowNoIndex": True,
+            },
+            "id": DATA_VIEW_ID_LOGS,
+            "type": "index-pattern",
+            "references": [],
+        },
+        {
+            "attributes": {
+                "name": f"{scenario_name} Traces",
+                "title": "traces-*",
+                "timeFieldName": "@timestamp",
+                "allowNoIndex": True,
+            },
+            "id": DATA_VIEW_ID_TRACES,
+            "type": "index-pattern",
+            "references": [],
+        },
+        {
+            "attributes": {
+                "name": f"{scenario_name} Metrics",
+                "title": "metrics-*",
+                "timeFieldName": "@timestamp",
+                "allowNoIndex": True,
+            },
+            "id": DATA_VIEW_ID_METRICS,
+            "type": "index-pattern",
+            "references": [],
+        },
+    ]
+
     # ── Build the dashboard saved object ─────────────────────────────────────
 
     dashboard = {
@@ -1174,7 +1216,7 @@ def _build_dashboard_ndjson(
             },
             "panelsJSON": json.dumps(panels),
             "refreshInterval": {"pause": False, "value": 10000},
-            "timeFrom": "now-2m",
+            "timeFrom": "now-30m",
             "timeRestore": True,
             "timeTo": "now",
             "title": f"{scenario_name} Executive Dashboard",
@@ -1187,7 +1229,10 @@ def _build_dashboard_ndjson(
         "typeMigrationVersion": "10.3.0",
     }
 
-    return json.dumps(dashboard, separators=(",", ":")) + "\n"
+    # Data views first (dependencies), then dashboard
+    lines = [json.dumps(dv, separators=(",", ":")) for dv in data_views]
+    lines.append(json.dumps(dashboard, separators=(",", ":")))
+    return "\n".join(lines) + "\n"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

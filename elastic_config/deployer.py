@@ -1280,13 +1280,23 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                 try:
                     data = resp.json()
                     count = data.get("successCount", 0)
-                    step.detail = f"Imported {count} objects ({self.scenario.scenario_name})"
+                    errors = data.get("errors", [])
+                    if errors:
+                        logger.warning("Dashboard import errors: %s", errors[:3])
+                    if count > 0:
+                        step.detail = f"Imported {count} objects ({self.scenario.scenario_name})"
+                        step.status = "ok"
+                    else:
+                        step.detail = f"Import returned successCount=0; errors={errors[:2]}"
+                        step.status = "failed"
+                        logger.error("Dashboard import returned 0 objects: %s", data)
                 except Exception:
                     step.detail = "Dashboard imported"
-                step.status = "ok"
+                    step.status = "ok"
             else:
                 step.status = "failed"
-                step.detail = f"Import failed (HTTP {resp.status_code})"
+                step.detail = f"Import failed (HTTP {resp.status_code}): {resp.text[:200]}"
+                logger.error("Dashboard import HTTP %s: %s", resp.status_code, resp.text[:400])
         except Exception as exc:
             step.status = "failed"
             step.detail = f"Dashboard generation failed: {exc}"
