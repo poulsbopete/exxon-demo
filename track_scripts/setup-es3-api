@@ -216,21 +216,8 @@ else
     echo "WARN: Missing Kibana URL or API key — learners can launch manually via Demo App tab"
 fi
 
-# ── Write credentials to static config.json for the Demo App UI ──────────────
-# The selector UI fetches /config.json on load to pre-populate the connection
-# settings form (Kibana URL + API key) so learners never have to paste creds.
-CONFIG_PATH="/opt/exxon-demo/app/selector/static/config.json"
-if [[ -n "${KIBANA_URL:-}" && -n "${ELASTICSEARCH_API_KEY:-}" ]]; then
-    mkdir -p "$(dirname "$CONFIG_PATH")"
-    cat > "$CONFIG_PATH" << JSONEOF
-{
-  "kibana_url": "${KIBANA_URL}",
-  "api_key": "${ELASTICSEARCH_API_KEY}",
-  "scenario_id": "exxon"
-}
-JSONEOF
-    echo "Wrote credentials to ${CONFIG_PATH} for Demo App pre-population ✓"
-fi
+# Credentials are stored in the SQLite DB via /api/setup/launch above.
+# The Demo App's /api/setup/defaults endpoint reads them back for the selector UI.
 
 # ── Pre-create all challenge workspace files ──────────────────────────────────
 # Done here (track level) so files exist even if a challenge setup script fails.

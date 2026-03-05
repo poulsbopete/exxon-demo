@@ -653,6 +653,32 @@ async def test_connection(body: dict):
     return result
 
 
+@app.get("/api/setup/defaults")
+async def setup_defaults():
+    """Return pre-provisioned credentials from the SQLite store.
+
+    Instruqt track setup calls /api/setup/launch with the Elastic Cloud
+    credentials immediately after provisioning.  The selector UI fetches
+    this endpoint on load so it can pre-populate the connection form without
+    the learner having to paste anything.
+    """
+    elastic_url, kibana_url, api_key = _get_default_creds()
+    if not kibana_url or not api_key:
+        return JSONResponse(status_code=204, content=None)
+    otlp_url = ""
+    if kibana_url and ".kb." in kibana_url:
+        otlp_url = kibana_url.replace(".kb.", ".ingest.").rstrip("/")
+        if not otlp_url.endswith(":443"):
+            otlp_url += ":443"
+    return {
+        "kibana_url": kibana_url,
+        "api_key": api_key,
+        "elastic_url": elastic_url,
+        "otlp_url": otlp_url,
+        "scenario_id": ACTIVE_SCENARIO,
+    }
+
+
 @app.post("/api/setup/launch")
 async def launch_setup(body: dict):
     """Launch deployment of a scenario to Elastic.

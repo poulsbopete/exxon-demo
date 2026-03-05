@@ -523,9 +523,11 @@
 
         renderScenarios();
 
-        // Pre-populate connection fields from server-written config (Instruqt provisioning)
+        // Pre-populate connection fields from provisioned credentials (Instruqt setup)
         try {
-            const cfg = await (await fetch('/config.json?_=' + Date.now())).json();
+            const r = await fetch('/api/setup/defaults');
+            if (!r.ok || r.status === 204) throw new Error('no defaults');
+            const cfg = await r.json();
             if (cfg.kibana_url) {
                 const kibanaField = document.getElementById('kibana-url');
                 if (kibanaField && !kibanaField.value) {
