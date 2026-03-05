@@ -125,11 +125,109 @@ class MockElasticHandler(http.server.BaseHTTPRequestHandler):
 
 
 def run_query_endpoint():
-    """Expose a simple /query endpoint on port 5601 for ES|QL simulations."""
+    """Serve the Elastic APM dashboard UI + JSON query API on port 5601."""
     import http.server as hs
+
+    def build_html():
+        with store_lock:
+            services = {}
+            for sig, docs in store.items():
+                for d in docs:
+                    svc = d.get("service.name", "unknown")
+                    if svc not in services:
+                        services[svc] = {"signals": set(), "count": 0}
+                    services[svc]["signals"].add(sig)
+                    services[svc]["count"] += 1
+
+        rows = ""
+        for svc, info in sorted(services.items()):
+            sigs = sorted(info["signals"])
+            badges = ""
+            colors = {"traces": "#00bfb3", "metrics": "#f04e98", "logs": "#fec514"}
+            for s in sigs:
+                c = colors.get(s, "#aaa")
+                badges += f'<span style="background:{c};color:#000;border-radius:4px;padding:2px 7px;font-size:11px;margin-right:4px">{s}</span>'
+            rows += f"<tr><td><b>{svc}</b></td><td>{badges}</td><td>{info['count']}</td></tr>\n"
+
+        if not rows:
+            rows = '<tr><td colspan="3" style="color:#8b949e;text-align:center">No data yet — run generate-telemetry.sh in the Terminal tab</td></tr>'
+
+        return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="5">
+<title>Elastic Serverless — Exxon APM</title>
+<style>
+  body{{font-family:-apple-system,sans-serif;margin:0;background:#0d1117;color:#e6edf3}}
+  .topbar{{background:#00bfb3;color:#000;padding:12px 24px;display:flex;align-items:center;gap:16px}}
+  .topbar h1{{margin:0;font-size:18px;font-weight:700}}
+  .topbar p{{margin:0;font-size:12px;opacity:.75}}
+  .body{{padding:24px}}
+  .card{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:20px}}
+  .card h2{{margin:0 0 16px;font-size:14px;color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:10px}}
+  table{{width:100%;border-collapse:collapse;font-size:13px}}
+  th{{text-align:left;color:#8b949e;font-weight:600;padding:6px 10px;border-bottom:1px solid #21262d}}
+  td{{padding:6px 10px;border-bottom:1px solid #21262d}}
+  .pill{{background:#1f2937;border:1px solid #30363d;border-radius:20px;padding:4px 12px;font-size:12px;display:inline-block}}
+  .green{{color:#3fb950}}.red{{color:#f85149}}.yellow{{color:#d29922}}
+  .info{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}}
+  .stat{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;text-align:center}}
+  .stat .num{{font-size:32px;font-weight:700;color:#00bfb3}}
+  .stat .lbl{{font-size:12px;color:#8b949e;margin-top:4px}}
+  .esql{{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:monospace;font-size:12px;color:#79c0ff;white-space:pre;overflow-x:auto}}
+  footer{{color:#8b949e;font-size:11px;text-align:center;padding:12px}}
+</style></head><body>
+<div class="topbar">
+  <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#fff"/><path d="M8 16c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#00bfb3" stroke-width="2.5" stroke-linecap="round"/><circle cx="16" cy="16" r="3" fill="#00bfb3"/></svg>
+  <div><h1>Elastic Serverless — Exxon Infrastructure 2.0</h1>
+  <p>Challenge 1 · Unified APM &amp; Logs with OTel · Auto-refreshes every 5s</p></div>
+</div>
+<div class="body">
+  <div class="info">
+    <div class="stat"><div class="num">{len(services)}</div><div class="lbl">Unified Services</div></div>
+    <div class="stat"><div class="num">{len(store.get('traces',[]))}</div><div class="lbl">Trace Docs</div></div>
+    <div class="stat"><div class="num">{len(store.get('metrics',[])) + len(store.get('logs',[]))}</div><div class="lbl">Metrics + Log Docs</div></div>
+  </div>
+  <div class="card">
+    <h2>Unified Service View — traces-apm-* · metrics-kubernetes.* · logs-apm-*</h2>
+    <table>
+      <tr><th>service.name</th><th>Signal Types (OTel)</th><th>Total Docs</th></tr>
+      {rows}
+    </table>
+  </div>
+  <div class="card">
+    <h2>ES|QL — Run this in Kibana Dev Tools to join APM traces with container metrics</h2>
+    <div class="esql">FROM traces-apm-* METADATA _index
+| WHERE @timestamp &gt; NOW() - 15 minutes
+| STATS
+    total_transactions = COUNT(*),
+    p95_latency_ms     = PERCENTILE(transaction.duration.us, 95) / 1000,
+    error_rate_pct     = ROUND(100.0 * COUNT_IF(event.outcome == "failure") / COUNT(*), 2)
+  BY service.name
+| SORT error_rate_pct DESC</div>
+  </div>
+  <div class="card">
+    <h2>Replacing These Tools</h2>
+    <table>
+      <tr><th>Signal</th><th>Old Tool</th><th>New (Elastic Serverless)</th></tr>
+      <tr><td>APM Traces</td><td class="red">Datadog APM (pipelines failing)</td><td class="green">traces-apm-* via OTLP</td></tr>
+      <tr><td>App Logs</td><td class="red">Splunk HEC</td><td class="green">logs-apm-* via OTLP</td></tr>
+      <tr><td>K8s Metrics</td><td class="yellow">Datadog Agent (OpenShift)</td><td class="green">metrics-kubernetes.* via OTLP</td></tr>
+    </table>
+  </div>
+</div>
+<footer>Mock Elastic Serverless · OTLP endpoint :8200 · Query API :5601 · Data auto-refreshes</footer>
+</body></html>"""
 
     class QueryHandler(hs.BaseHTTPRequestHandler):
         def do_GET(self):
+            if self.path in ("/", "/dashboard"):
+                body = build_html().encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if self.path == "/health":
                 self.send_response(200)
                 self.end_headers()

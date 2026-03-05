@@ -33,6 +33,12 @@ tabs:
   type: code
   hostname: shell
   path: /root/exxon-snmp
+- id: ixrakllyxvvy
+  title: Elastic
+  type: service
+  hostname: shell
+  path: /
+  port: 5601
 difficulty: intermediate
 timelimit: 2400
 enhanced_loading: null

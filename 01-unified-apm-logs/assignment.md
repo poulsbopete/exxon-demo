@@ -38,6 +38,12 @@ tabs:
   type: code
   hostname: shell
   path: /root/exxon-otel
+- id: wsvlvbi7u4ex
+  title: Elastic
+  type: service
+  hostname: shell
+  path: /
+  port: 5601
 difficulty: basic
 timelimit: 1800
 enhanced_loading: null

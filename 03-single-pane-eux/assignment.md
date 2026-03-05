@@ -35,10 +35,10 @@ tabs:
   hostname: shell
   path: /root/exxon-eux
 - id: mrilphzzwkcj
-  title: Dashboard
+  title: Elastic
   type: service
   hostname: shell
-  path: /dashboard
+  path: /
   port: 5601
 difficulty: intermediate
 timelimit: 2700

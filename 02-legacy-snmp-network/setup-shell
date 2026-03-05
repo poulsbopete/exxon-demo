@@ -501,6 +501,164 @@ chmod +x "${WORK_DIR}/check-snmp-ingest.sh"
 ok "Validation script written"
 
 # -----------------------------------------------------------------------------
+# 8b. Write and start an HTML dashboard server on port 5601
+# -----------------------------------------------------------------------------
+info "Writing SNMP dashboard server on port 5601..."
+cat > /root/mock-snmp-ui.py << 'PYEOF'
+#!/usr/bin/env python3
+"""
+Elastic-style HTML dashboard for Challenge 2 — SNMP network events.
+Reads from the mock Elasticsearch store via its HTTP API and renders live data.
+Auto-refreshes every 5 seconds.
+"""
+import http.server, json, html, urllib.request
+from datetime import datetime
+
+ES_URL = "http://localhost:9200"
+
+def fetch(path):
+    try:
+        with urllib.request.urlopen(ES_URL + path, timeout=2) as r:
+            return json.loads(r.read())
+    except Exception:
+        return {}
+
+def build_html():
+    cmdb_count = fetch("/exxon-cmdb-devices/_count").get("count", 0)
+    trap_data  = fetch("/logs-snmp.trap-exxon/_search")
+    trap_hits  = trap_data.get("hits", {}).get("hits", [])
+    trap_count = trap_data.get("hits", {}).get("total", {}).get("value", 0)
+
+    trap_rows = ""
+    site_counts = {}
+    for h in trap_hits[:20]:
+        s = h.get("_source", {})
+        etype = s.get("event.type", "?")
+        color = "#f85149" if etype == "linkDown" else "#3fb950"
+        ts    = s.get("@timestamp", "")[:19]
+        host  = s.get("snmp.system.name", "?")
+        iface = s.get("snmp.interface.index", "?")
+        site  = s.get("network.site", "—")
+        owner = s.get("application.owner", "—")
+        site_counts[site] = site_counts.get(site, 0) + (1 if etype == "linkDown" else 0)
+        trap_rows += f"<tr><td>{ts}</td><td><span style='color:{color};font-weight:700'>{html.escape(etype)}</span></td><td>{html.escape(host)}</td><td>{html.escape(iface)}</td><td>{html.escape(site)}</td><td style='font-size:11px;color:#8b949e'>{html.escape(owner)}</td></tr>\n"
+
+    if not trap_rows:
+        trap_rows = '<tr><td colspan="6" style="color:#8b949e;text-align:center">No traps yet — run send-snmp-traps.sh in the Terminal tab</td></tr>'
+
+    site_rows = ""
+    for site, cnt in sorted(site_counts.items(), key=lambda x: -x[1]):
+        bar_w = min(int(cnt / max(site_counts.values(), default=1) * 200), 200)
+        site_rows += f"<tr><td>{html.escape(site)}</td><td><div style='background:#d32f2f;height:14px;width:{bar_w}px;border-radius:3px;display:inline-block'></div> {cnt}</td></tr>\n"
+
+    link_downs = sum(1 for h in trap_hits if h.get("_source",{}).get("event.type") == "linkDown")
+
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="refresh" content="5">
+<title>Elastic Serverless — Exxon SNMP</title>
+<style>
+  body{{font-family:-apple-system,sans-serif;margin:0;background:#0d1117;color:#e6edf3}}
+  .topbar{{background:#00bfb3;color:#000;padding:12px 24px;display:flex;align-items:center;gap:16px}}
+  .topbar h1{{margin:0;font-size:18px;font-weight:700}}
+  .topbar p{{margin:0;font-size:12px;opacity:.75}}
+  .body{{padding:24px}}
+  .card{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:20px}}
+  .card h2{{margin:0 0 16px;font-size:14px;color:#58a6ff;border-bottom:1px solid #30363d;padding-bottom:10px}}
+  table{{width:100%;border-collapse:collapse;font-size:13px}}
+  th{{text-align:left;color:#8b949e;font-weight:600;padding:6px 10px;border-bottom:1px solid #21262d}}
+  td{{padding:6px 10px;border-bottom:1px solid #21262d}}
+  .info{{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}}
+  .stat{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;text-align:center}}
+  .stat .num{{font-size:32px;font-weight:700;color:#00bfb3}}
+  .stat .red{{color:#f85149}}
+  .stat .lbl{{font-size:12px;color:#8b949e;margin-top:4px}}
+  .esql{{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:16px;font-family:monospace;font-size:12px;color:#79c0ff;white-space:pre;overflow-x:auto}}
+  footer{{color:#8b949e;font-size:11px;text-align:center;padding:12px}}
+</style></head><body>
+<div class="topbar">
+  <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#fff"/><path d="M8 16c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#00bfb3" stroke-width="2.5" stroke-linecap="round"/><circle cx="16" cy="16" r="3" fill="#00bfb3"/></svg>
+  <div><h1>Elastic Serverless — Exxon Infrastructure 2.0</h1>
+  <p>Challenge 2 · SNMP Network Events + CMDB Enrichment · Auto-refreshes every 5s</p></div>
+</div>
+<div class="body">
+  <div class="info">
+    <div class="stat"><div class="num">{cmdb_count}</div><div class="lbl">CMDB Device Records</div></div>
+    <div class="stat"><div class="num {'red' if link_downs > 0 else ''}">{link_downs}</div><div class="lbl">Active linkDown Events</div></div>
+    <div class="stat"><div class="num">{trap_count}</div><div class="lbl">Total SNMP Traps Ingested</div></div>
+  </div>
+  <div class="card">
+    <h2>SNMP Trap Stream — logs-snmp.trap-exxon (enriched with ServiceNow CMDB)</h2>
+    <table>
+      <tr><th>Timestamp</th><th>Event</th><th>Device</th><th>Interface</th><th>Site</th><th>App Owner</th></tr>
+      {trap_rows}
+    </table>
+  </div>
+  <div class="card" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div>
+      <h2>linkDown Events by Site</h2>
+      <table><tr><th>Site</th><th>Count</th></tr>{site_rows or '<tr><td colspan="2" style="color:#8b949e">No data yet</td></tr>'}</table>
+    </div>
+    <div>
+      <h2>ES|QL — Network Impact Query</h2>
+      <div class="esql" style="font-size:11px">FROM logs-snmp.trap-exxon
+| WHERE @timestamp > NOW() - 30 minutes
+| WHERE event.type == "linkDown"
+| STATS
+    link_down_count = COUNT(*),
+    affected_interfaces = VALUES(
+      snmp.interface.index)
+  BY network.site, application.owner
+| SORT link_down_count DESC</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>This View Replaces</h2>
+    <table>
+      <tr><th>Tool</th><th>Previous Limitation</th><th>Elastic Serverless</th></tr>
+      <tr><td>OpenNMS</td><td style="color:#f85149">Network team only, no app correlation</td><td style="color:#3fb950">SNMP traps in same Kibana as APM traces</td></tr>
+      <tr><td>ThousandEyes</td><td style="color:#f85149">Siloed WAN visibility</td><td style="color:#3fb950">Correlated via CMDB thousandeyes.agent_id</td></tr>
+      <tr><td>ServiceNow CMDB</td><td style="color:#f85149">Manual lookup per incident</td><td style="color:#3fb950">Enrich policy joins at query time</td></tr>
+    </table>
+  </div>
+</div>
+<footer>Mock Elastic Serverless · Elasticsearch :9200 · UI :5601 · Data auto-refreshes</footer>
+</body></html>"""
+
+class UIHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path in ("/", "/dashboard"):
+            body = build_html().encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        elif self.path == "/health":
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"status":"green"}')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def log_message(self, *a):
+        pass
+
+if __name__ == "__main__":
+    import sys
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5601
+    print(f"[INFO] SNMP UI dashboard listening on :{port}")
+    http.server.HTTPServer(("0.0.0.0", port), UIHandler).serve_forever()
+PYEOF
+chmod +x /root/mock-snmp-ui.py
+
+pkill -f "mock-snmp-ui.py" 2>/dev/null || true
+nohup python3 /root/mock-snmp-ui.py 5601 > "${LOG_DIR}/snmp-ui.log" 2>&1 &
+sleep 1
+curl -sf "http://localhost:5601/health" >/dev/null 2>&1 && ok "SNMP UI dashboard started on port 5601" || warn "SNMP UI may not have started yet"
+
+# -----------------------------------------------------------------------------
 # 9. Pre-load CMDB data
 # -----------------------------------------------------------------------------
 info "Pre-loading CMDB data..."
