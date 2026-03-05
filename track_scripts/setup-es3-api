@@ -234,6 +234,11 @@ echo "Creating challenge workspace files..."
 ES_URL_VAL=$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || echo "${ES_URL:-http://localhost:9200}")
 API_KEY_VAL=$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "${ELASTICSEARCH_API_KEY:-}")
 
+# For Elastic Serverless, OTLP telemetry goes to the .ingest. endpoint (not .es.)
+# Derive it by swapping .es. → .ingest. and appending :443
+OTLP_URL_VAL=$(echo "$ES_URL_VAL" | sed 's/\.es\./.ingest./')
+[[ "$OTLP_URL_VAL" != *":443" ]] && OTLP_URL_VAL="${OTLP_URL_VAL}:443"
+
 # ── Challenge 1: /root/exxon-otel/ ────────────────────────────────────────────
 mkdir -p /root/exxon-otel/queries
 
@@ -274,9 +279,12 @@ processors:
 
 exporters:
   otlphttp/elastic:
-    endpoint: "${ES_URL_VAL}"
+    # Elastic Serverless OTLP ingest endpoint (.ingest. — NOT .es.)
+    endpoint: "${OTLP_URL_VAL}"
     headers:
       Authorization: "ApiKey ${API_KEY_VAL}"
+    tls:
+      insecure: false
 
 service:
   pipelines:
