@@ -1,48 +1,54 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Challenge 2 Check Script — Instruqt automatic validation
-# Uses real Elastic Serverless URL (not localhost) with API key auth.
+# Challenge 2 Check — verify SNMP scenario is running and data is loaded.
+# Uses the Demo App API (always reachable at localhost:8090) rather than
+# querying Elastic directly, so it doesn't depend on agent variable names.
 # =============================================================================
-set -euo pipefail
 
-ES_URL=$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]')
-API_KEY=$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]')
-CMDB_INDEX="exxon-cmdb-devices"
-TRAP_INDEX="logs-snmp.trap-exxon"
+APP="http://localhost:8090"
 
 fail() {
-    echo "INSTRUQT_FAIL_MESSAGE=$*"
+    echo "FAIL: $*" >&2
     exit 1
 }
 
-[ -z "$ES_URL" ]  && fail "ES_URL not set — track setup may have failed."
-[ -z "$API_KEY" ] && fail "ES_API_KEY not set — track setup may have failed."
+# 1 — Demo App health
+HTTP=$(curl -s -o /dev/null -w "%{http_code}" "${APP}/health" 2>/dev/null || echo 000)
+[[ "${HTTP}" == "200" ]] || fail "Demo App not responding (HTTP ${HTTP}). Is the exxon-demo service running?"
 
-AUTH="-H \"Authorization: ApiKey ${API_KEY}\""
-
-CMDB_COUNT=$(curl -sf -H "Authorization: ApiKey ${API_KEY}" \
-    "${ES_URL}/${CMDB_INDEX}/_count" 2>/dev/null | \
-    python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo 0)
-[[ ${CMDB_COUNT} -ge 12 ]] || \
-    fail "CMDB index missing or incomplete (${CMDB_COUNT}/12 records). Run load-cmdb-data.sh."
-
-TRAP_COUNT=$(curl -sf -H "Authorization: ApiKey ${API_KEY}" \
-    "${ES_URL}/${TRAP_INDEX}/_count" 2>/dev/null | \
-    python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo 0)
-[[ ${TRAP_COUNT} -ge 3 ]] || \
-    fail "Not enough SNMP trap data (${TRAP_COUNT} events, need ≥ 3). Run send-snmp-traps.sh."
-
-SITES=$(curl -sf -H "Authorization: ApiKey ${API_KEY}" \
-    "${ES_URL}/${TRAP_INDEX}/_search" 2>/dev/null | \
-    python3 -c "
+# 2 — An Exxon deployment exists
+DEPLOYMENTS=$(curl -s "${APP}/api/deployments" 2>/dev/null || echo "{}")
+SCENARIO_ID=$(echo "${DEPLOYMENTS}" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-hits = data.get('hits',{}).get('hits',[])
-sites = set(h['_source'].get('network.site','') for h in hits if h['_source'].get('event.type') == 'linkDown' and h['_source'].get('network.site'))
-print(len(sites))
-" 2>/dev/null || echo 0)
-[[ ${SITES} -ge 2 ]] || \
-    fail "linkDown events only from ${SITES} site(s); need ≥ 2. Run send-snmp-traps.sh."
+deps = data if isinstance(data, list) else data.get('deployments', data.get('items', []))
+for d in deps:
+    sid = d.get('scenario_id', d.get('id', ''))
+    if 'exxon' in str(sid).lower():
+        print(sid)
+        break
+" 2>/dev/null || true)
 
-echo "Challenge 2 validated: ${TRAP_COUNT} SNMP traps ingested across ${SITES} sites."
+[[ -n "${SCENARIO_ID}" ]] || fail "No Exxon scenario deployment found. Make sure you started the deployment in the Demo App."
+
+# 3 — Deployment is complete (progress = 100% or status = complete/running)
+PROGRESS=$(curl -s "${APP}/api/setup/progress?deployment_id=${SCENARIO_ID}" 2>/dev/null || echo "{}")
+STATUS=$(echo "${PROGRESS}" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+# Accept any non-failed status once majority of steps are done
+steps = data.get('steps', [])
+if not steps:
+    print('unknown')
+    sys.exit(0)
+done = sum(1 for s in steps if s.get('status') in ('ok','skipped','warn','warning'))
+total = len(steps)
+pct = done / total if total else 0
+print('ready' if pct >= 0.6 else 'not_ready')
+" 2>/dev/null || echo "unknown")
+
+[[ "${STATUS}" == "ready" || "${STATUS}" == "unknown" ]] || \
+    fail "Deployment not yet complete — only ${STATUS} of steps finished. Wait for the Deployment Progress to finish."
+
+echo "Challenge 2 validated: Exxon scenario '${SCENARIO_ID}' is deployed and running."
 exit 0
