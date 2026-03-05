@@ -126,17 +126,6 @@ server {
   }
 }
 
-server {
-  listen 9200;
-  server_name elasticsearch;
-  location / {
-    proxy_pass ${ES_URL};
-    proxy_connect_timeout 300;
-    proxy_send_timeout    300;
-    proxy_read_timeout    300;
-    send_timeout          300;
-  }
-}
 NGINX_EOF
 
 systemctl restart nginx
@@ -231,7 +220,8 @@ fi
 # Done here (track level) so files exist even if a challenge setup script fails.
 echo "Creating challenge workspace files..."
 
-ES_URL_VAL=$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || echo "${ES_URL:-http://localhost:9200}")
+ES_URL_VAL=$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]')
+[ -z "$ES_URL_VAL" ] && { echo "ERROR: ES_URL agent variable not set — was track provisioning successful?"; exit 1; }
 API_KEY_VAL=$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "${ELASTICSEARCH_API_KEY:-}")
 
 # For Elastic Serverless, OTLP telemetry goes to the .ingest. endpoint (not .es.)
@@ -458,7 +448,8 @@ YAML
 cat > /root/exxon-snmp/load-cmdb-data.sh << SCRIPT
 #!/bin/bash
 set -euo pipefail
-ES_URL=\$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || echo "http://localhost:9200")
+ES_URL=\$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]')
+[ -z "\$ES_URL" ] && { echo "ERROR: ES_URL not set — run from within the Instruqt track"; exit 1; }
 API_KEY=\$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "")
 echo "Loading CMDB data to Elasticsearch..."
 DEVICES=(
@@ -491,7 +482,8 @@ chmod +x /root/exxon-snmp/load-cmdb-data.sh
 cat > /root/exxon-snmp/send-snmp-traps.sh << SCRIPT
 #!/bin/bash
 set -euo pipefail
-ES_URL=\$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || echo "http://localhost:9200")
+ES_URL=\$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]')
+[ -z "\$ES_URL" ] && { echo "ERROR: ES_URL not set — run from within the Instruqt track"; exit 1; }
 API_KEY=\$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "")
 NOW=\$(date -u +%Y-%m-%dT%H:%M:%SZ)
 post_trap() {
@@ -532,7 +524,8 @@ ESQL
 
 cat > /root/exxon-snmp/check-snmp-ingest.sh << SCRIPT
 #!/bin/bash
-ES_URL=\$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || echo "http://localhost:9200")
+ES_URL=\$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]')
+[ -z "\$ES_URL" ] && { echo "ERROR: ES_URL not set — run from within the Instruqt track"; exit 1; }
 API_KEY=\$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "")
 PASS=0; FAIL=0
 check_count() {

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Challenge 2 Check Script — Instruqt automatic validation
+# Uses real Elastic Serverless URL (not localhost) with API key auth.
 # =============================================================================
 set -euo pipefail
 
-ES_URL="http://localhost:9200"
+ES_URL=$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]')
+API_KEY=$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]')
 CMDB_INDEX="exxon-cmdb-devices"
 TRAP_INDEX="logs-snmp.trap-exxon"
 
@@ -13,17 +15,25 @@ fail() {
     exit 1
 }
 
-CMDB_COUNT=$(curl -sf "${ES_URL}/${CMDB_INDEX}/_count" 2>/dev/null | \
+[ -z "$ES_URL" ]  && fail "ES_URL not set — track setup may have failed."
+[ -z "$API_KEY" ] && fail "ES_API_KEY not set — track setup may have failed."
+
+AUTH="-H \"Authorization: ApiKey ${API_KEY}\""
+
+CMDB_COUNT=$(curl -sf -H "Authorization: ApiKey ${API_KEY}" \
+    "${ES_URL}/${CMDB_INDEX}/_count" 2>/dev/null | \
     python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo 0)
 [[ ${CMDB_COUNT} -ge 12 ]] || \
     fail "CMDB index missing or incomplete (${CMDB_COUNT}/12 records). Run load-cmdb-data.sh."
 
-TRAP_COUNT=$(curl -sf "${ES_URL}/${TRAP_INDEX}/_count" 2>/dev/null | \
+TRAP_COUNT=$(curl -sf -H "Authorization: ApiKey ${API_KEY}" \
+    "${ES_URL}/${TRAP_INDEX}/_count" 2>/dev/null | \
     python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo 0)
 [[ ${TRAP_COUNT} -ge 3 ]] || \
     fail "Not enough SNMP trap data (${TRAP_COUNT} events, need ≥ 3). Run send-snmp-traps.sh."
 
-SITES=$(curl -sf "${ES_URL}/${TRAP_INDEX}/_search" 2>/dev/null | \
+SITES=$(curl -sf -H "Authorization: ApiKey ${API_KEY}" \
+    "${ES_URL}/${TRAP_INDEX}/_search" 2>/dev/null | \
     python3 -c "
 import sys, json
 data = json.load(sys.stdin)

@@ -78,7 +78,7 @@ to application teams. ThousandEyes agents on the same switches provide
 circuit-level data, but only the WAN team can see it.
 
 **What happens in the sandbox:**
-- Mock Elasticsearch starts on `localhost:9200`
+- CMDB device records and SNMP trap data are posted directly to Elastic Serverless
 - 12 ServiceNow CMDB device records are loaded (hostname → site → app owner
   → ThousandEyes agent ID)
 - A trap generator sends simulated Cisco `linkDown`/`linkUp` events with
@@ -200,9 +200,9 @@ instruqt track create-invite --track elastic-exxon-serverless-observability --ti
 
 | Variable | Value | Notes |
 |---|---|---|
-| `ELASTIC_URL` | `http://localhost:8200` | Mock OTLP endpoint (Challenge 1) |
-| `ES_URL` | `http://localhost:9200` | Mock Elasticsearch (Challenges 2 & 3) |
-| `KIBANA_URL` | `http://localhost:5601` | Mock Kibana / dashboard server |
+| `ES_URL` | Elastic Serverless ES endpoint | Set by track provisioning via `agent variable set` |
+| `ES_KIBANA_URL` | Elastic Serverless Kibana endpoint | Set by track provisioning |
+| `ES_API_KEY` | API key (base64 encoded) | Set by track provisioning |
 | `DEMO_USER` | `jsmith` | EUX investigation target user |
 | `DEMO_SITE` | `Midland-Field-Ops` | EUX investigation target site |
 

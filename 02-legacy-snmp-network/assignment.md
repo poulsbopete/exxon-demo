@@ -170,7 +170,7 @@ Key configuration points:
 | `community` | `exxon-public` | v2c community string |
 | `translate_oids` | `true` | Converts OIDs to readable names |
 | `fields.network.site` | dynamic | Populated by enrich policy |
-| `output.elasticsearch.hosts` | `localhost:9200` | Mock Elastic endpoint |
+| `output.elasticsearch.hosts` | your Elastic Serverless ES URL | From `agent variable get ES_URL` |
 
 ---
 
@@ -187,7 +187,7 @@ cd /root/exxon-snmp
 ./load-cmdb-data.sh
 ```
 
-This script POSTs 12 device records to the mock Elastic endpoint under index
+This script POSTs 12 device records directly to your Elastic Serverless instance under index
 `exxon-cmdb-devices`. Each record has:
 
 ```json
@@ -200,10 +200,12 @@ This script POSTs 12 device records to the mock Elastic endpoint under index
 }
 ```
 
-After loading, verify the CMDB index:
+After loading, verify the CMDB index in Elastic Serverless:
 
 ```bash
-curl -s http://localhost:9200/exxon-cmdb-devices/_count | jq .
+ES_URL=$(agent variable get ES_URL)
+API_KEY=$(agent variable get ES_API_KEY)
+curl -s -H "Authorization: ApiKey $API_KEY" "$ES_URL/exxon-cmdb-devices/_count" | jq .
 ```
 
 Expected: `{ "count": 12 }`
