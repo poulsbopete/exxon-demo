@@ -95,7 +95,7 @@ tabs:
   title: Elastic Serverless
   type: service
   hostname: es3-api
-  path: /app/discover
+  path: /app/discover#/?_a=(query:(esql:'FROM logs*\n| WHERE snmp.trap.type IS NOT NULL\n| KEEP @timestamp,device.hostname,network.interface,snmp.trap.type\n| SORT @timestamp DESC\n| LIMIT 20'))
   port: 8080
   custom_request_headers:
   - key: Content-Security-Policy
@@ -146,65 +146,65 @@ channels. Activate **Channel 5 — Cisco Circuit Flap (Houston Refinery)**:
 
 ---
 
-## Step 2 — Explore SNMP + CMDB Data in Kibana
+## Step 2 — Query SNMP + CMDB Data with ES|QL
 
-Switch to the **Elastic Serverless** tab and navigate to **Discover**.
+Switch to the **Elastic Serverless** tab. Click the **ES|QL** button in the
+top bar of Discover.
 
 ### 2a — Find the SNMP Trap Events
 
-In the data view selector, choose **`Exxon Infrastructure 2.0 Logs`** (pattern: `logs*`).
-Set the time range to **Last 1 hour**. Filter for:
+Paste this query and click **Run**:
 
+```esql
+FROM logs*
+| WHERE snmp.trap.type IS NOT NULL
+| KEEP @timestamp, device.hostname, network.interface, network.site, snmp.trap.type, message
+| SORT @timestamp DESC
+| LIMIT 20
 ```
-snmp.trap.type : "linkDown"
+
+You will see SNMP trap events for Cisco switches across Houston, Midland,
+and Corpus Christi — `device.hostname`, `network.interface`, `network.site`,
+and `snmp.trap.type` all in one table.
+
+### 2b — Count Flaps by Switch (the NOC View)
+
+```esql
+FROM logs*
+| WHERE snmp.trap.type == "linkDown"
+| STATS flap_count = COUNT(*), interfaces = VALUES(network.interface)
+    BY device.hostname, network.site
+| SORT flap_count DESC
 ```
 
-You will see SNMP trap events for multiple Cisco switches across Houston,
-Midland, and Corpus Christi sites. Each event contains:
+> **This query in OpenNMS requires a custom report. In Elastic: one line.**
 
-| Field | Example Value |
-|---|---|
-| `device.hostname` | `cisco-sw-houston-01` |
-| `device.ip` | `10.12.5.22` |
-| `network.interface` | `GigabitEthernet0/47` |
-| `network.site` | `Houston-Refinery-Campus` |
-| `snmp.trap.type` | `linkDown` |
+### 2c — Cross-Correlate: Network Flap + APM Errors on the Same Timeline
 
-### 2b — See the CMDB Enrichment
+Now join the SNMP events with application error logs in a single query:
 
-Click any `linkDown` event and expand the document. Scroll to the CMDB fields:
+```esql
+FROM logs*
+| WHERE (snmp.trap.type == "linkDown") OR (service.name == "api-gateway" AND log.level == "ERROR")
+| KEEP @timestamp, snmp.trap.type, device.hostname, service.name, message
+| SORT @timestamp DESC
+| LIMIT 30
+```
 
-| Field | Example Value |
-|---|---|
-| `cmdb.asset_tag` | `CHG0043891` |
-| `cmdb.ci_class` | `Cisco Catalyst 9300` |
-| `application.owner` | `exxon-infrastructure-2.0-team` |
-| `business.service` | `Upstream-Operations` |
-| `thousandeyes.agent_id` | `TE-HOU-001` |
+You will see `linkDown` traps from `cisco-sw-houston-01` and `api-gateway`
+ERROR logs interleaved on the **same timeline** — the circuit flap causing
+the API errors, visible in one query.
 
-> **This is the magic.** The SNMP trap came in with just an IP address.
-> Elastic's enrich policy joined it with the ServiceNow CMDB at query time
-> to show *which business service this switch supports* — no ETL, no JOIN
-> query, no manual lookup.
+> **This is what Exxon can't do today.** OpenNMS shows the circuit flap.
+> Datadog shows the API errors. Elastic shows both — in a single ES|QL query.
 
 ---
 
-## Step 3 — Cross-Correlate: Network + APM on the Same Timeline
-
-In the **Elastic Serverless** tab, navigate to **Dashboards** → open the
-**"Exxon Infrastructure 2.0 Executive Dashboard"**.
-
-Find the **APM Errors Over Time** panel and the **Log Volume** panel. Notice
-that SNMP `linkDown` events and `api-gateway` error spikes share the same
-timestamp window.
-
-> **This is the unified timeline Exxon can't build today.** OpenNMS shows
-> the circuit flap. Datadog shows the API errors. Elastic shows both —
-> with the CMDB enrichment proving which switch caused which service impact.
+## Step 3 — Alert Rule
 
 Navigate to **Alerts** → **Rules** and find the alert rule for
-**"Channel 05: Cisco Circuit Flap — Houston Refinery"** — this rule would
-page the WAN team and the app team simultaneously from one platform.
+**"Channel 05: Cisco Circuit Flap — Houston Refinery"** — this rule pages
+the WAN team and the app team simultaneously from one platform.
 
 ---
 
@@ -219,9 +219,9 @@ In the **left navigation**, click **AI Agent** (not the chat bubble icon in the 
 > *"What Cisco switch is flapping at the Houston refinery and what business
 > service does it support?"*
 
-The agent uses ES|QL to join `logs-snmp.trap-exxon` with the CMDB data
-and cross-references `api-gateway` error logs — the same query that would
-take 45 minutes of manual cross-team investigation today.
+The agent uses ES|QL to query `logs*` for SNMP trap events and
+cross-references `api-gateway` error logs — the same correlation that
+takes 45 minutes of manual cross-team investigation today.
 
 ---
 
