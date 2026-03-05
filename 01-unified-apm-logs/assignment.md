@@ -29,21 +29,32 @@ notes:
     key across APM traces (`traces-apm-*`), infrastructure metrics
     (`metrics-*`), and application logs (`logs-*`).
 tabs:
-- id: kqqkx35h6hrw
+- id: qje4n9p40moe
   title: Terminal
   type: terminal
-  hostname: shell
-- id: frdodbopbyyv
-  title: Editor
-  type: code
-  hostname: shell
-  path: /root/exxon-otel
-- id: wsvlvbi7u4ex
-  title: Elastic
+  hostname: es3-api
+- id: 5hcn3kt9phei
+  title: Demo App
   type: service
-  hostname: shell
+  hostname: es3-api
   path: /
-  port: 80
+  port: 8090
+- id: tpgjkiktcvye
+  title: Elastic Serverless
+  type: service
+  hostname: es3-api
+  path: /app/dashboards#/list?_g=(filters:!(),refreshInterval:(pause:!f,value:30000),time:(from:now-30m,to:now))
+  port: 8080
+  custom_request_headers:
+  - key: Content-Security-Policy
+    value: 'script-src ''self'' https://kibana.estccdn.com; worker-src blob: ''self'';
+      style-src ''unsafe-inline'' ''self'' https://kibana.estccdn.com; style-src-elem
+      ''unsafe-inline'' ''self'' https://kibana.estccdn.com'
+  custom_response_headers:
+  - key: Content-Security-Policy
+    value: 'script-src ''self'' https://kibana.estccdn.com; worker-src blob: ''self'';
+      style-src ''unsafe-inline'' ''self'' https://kibana.estccdn.com; style-src-elem
+      ''unsafe-inline'' ''self'' https://kibana.estccdn.com'
 difficulty: basic
 timelimit: 1800
 enhanced_loading: null

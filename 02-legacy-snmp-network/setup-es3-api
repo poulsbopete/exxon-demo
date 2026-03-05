@@ -1,0 +1,26 @@
+#!/bin/bash
+# Challenge setup — the Elastic project, nginx, and demo app were already
+# started by track_scripts/setup-es3-api. Just verify everything is healthy.
+set -euo pipefail
+
+DEMO_PORT=8090
+log() { printf "[challenge-setup] %s\n" "$*"; }
+
+for i in $(seq 1 30); do
+  if curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1; then
+    log "Demo app healthy ✓"
+    exit 0
+  fi
+  sleep 2
+done
+
+log "App not responding — attempting restart..."
+systemctl restart exxon-demo
+sleep 5
+
+if curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1; then
+  log "Demo app healthy after restart ✓"
+else
+  log "ERROR: App still not healthy. Run: journalctl -u exxon-demo -n 50"
+  exit 1
+fi

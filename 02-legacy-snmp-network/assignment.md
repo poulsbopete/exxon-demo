@@ -24,21 +24,32 @@ notes:
     files. **Runtime fields** and **enrich policies** let you join incoming
     trap data with a ServiceNow CMDB index at query time — no ETL required.
 tabs:
-- id: jirc1uxyauuo
+- id: 4lxqmpxckh5p
   title: Terminal
   type: terminal
-  hostname: shell
-- id: z2xahnnwglgi
-  title: Editor
-  type: code
-  hostname: shell
-  path: /root/exxon-snmp
-- id: ixrakllyxvvy
-  title: Elastic
+  hostname: es3-api
+- id: zjyfrxv8lhfa
+  title: Demo App
   type: service
-  hostname: shell
+  hostname: es3-api
   path: /
-  port: 80
+  port: 8090
+- id: 1mwg7lywnkoo
+  title: Elastic Serverless
+  type: service
+  hostname: es3-api
+  path: /app/dashboards#/list?_g=(filters:!(),refreshInterval:(pause:!f,value:30000),time:(from:now-30m,to:now))
+  port: 8080
+  custom_request_headers:
+  - key: Content-Security-Policy
+    value: 'script-src ''self'' https://kibana.estccdn.com; worker-src blob: ''self'';
+      style-src ''unsafe-inline'' ''self'' https://kibana.estccdn.com; style-src-elem
+      ''unsafe-inline'' ''self'' https://kibana.estccdn.com'
+  custom_response_headers:
+  - key: Content-Security-Policy
+    value: 'script-src ''self'' https://kibana.estccdn.com; worker-src blob: ''self'';
+      style-src ''unsafe-inline'' ''self'' https://kibana.estccdn.com; style-src-elem
+      ''unsafe-inline'' ''self'' https://kibana.estccdn.com'
 difficulty: intermediate
 timelimit: 2400
 enhanced_loading: null

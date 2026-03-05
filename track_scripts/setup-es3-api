@@ -1,0 +1,251 @@
+#!/bin/bash
+# =============================================================================
+# Track-level setup — runs ONCE when the sandbox is created.
+# 1. Provisions an Elastic Cloud Serverless Observability project
+# 2. Configures nginx on :8080 as a reverse proxy to Kibana (Elastic tab)
+# 3. Clones exxon-demo repo and starts the demo app on :8090 (Demo App tab)
+# 4. Auto-launches the Exxon Infrastructure 2.0 scenario
+# =============================================================================
+
+# ── Resolve API key from multiple Instruqt secret sources ────────────────────
+echo "=== Checking for ESS API key ==="
+if [ -z "${PME_CLOUD_INSTRUQT_API_KEY:-}" ]; then
+    PME_CLOUD_INSTRUQT_API_KEY="${ESS_CLOUD_API_KEY:-}"
+fi
+if [ -z "${PME_CLOUD_INSTRUQT_API_KEY:-}" ]; then
+    PME_CLOUD_INSTRUQT_API_KEY=$(agent variable get PME_CLOUD_INSTRUQT_API_KEY 2>/dev/null || echo "")
+fi
+if [ -z "${PME_CLOUD_INSTRUQT_API_KEY:-}" ]; then
+    ESS_KEY=$(agent variable get ESS_CLOUD_API_KEY 2>/dev/null || echo "")
+    [ -n "$ESS_KEY" ] && PME_CLOUD_INSTRUQT_API_KEY="$ESS_KEY"
+fi
+
+if [ -z "${PME_CLOUD_INSTRUQT_API_KEY:-}" ]; then
+    echo "ERROR: ESS_CLOUD_API_KEY secret not found. Configure it in Instruqt Sandbox > Secrets."
+    exit 1
+fi
+export PME_CLOUD_INSTRUQT_API_KEY
+echo "API key found ✓"
+
+set -euxo pipefail
+
+# ── Wait for host bootstrap ───────────────────────────────────────────────────
+until [ -f /opt/instruqt/bootstrap/host-bootstrap-completed ]; do sleep 1; done
+echo "Host bootstrap complete ✓"
+
+# ── Provision Elastic Cloud Serverless project ────────────────────────────────
+echo "Provisioning Elastic Cloud Serverless Observability project..."
+python3 bin/es3-api.py \
+    --operation create \
+    --project-type "${PROJECT_TYPE:-observability}" \
+    --product-tier "${PRODUCT_TIER:-complete}" \
+    --regions "${REGIONS:-aws-us-east-1}" \
+    --project-name "exxon-infra2-${INSTRUQT_PARTICIPANT_ID:-local}-$(date '+%s')" \
+    --api-key "${PME_CLOUD_INSTRUQT_API_KEY}" \
+    --wait-for-ready
+
+# ── Read project credentials from es3-api output ─────────────────────────────
+timeout=30
+for i in $(seq 1 $timeout); do
+    [ -f /tmp/project_results.json ] && { echo "project_results.json found ✓"; break; }
+    echo "Waiting for project_results.json ($i/$timeout)..."
+    sleep 1
+    [ $i -eq $timeout ] && { echo "ERROR: Timed out waiting for project_results.json"; exit 1; }
+done
+
+REGION="${REGIONS:-aws-us-east-1}"
+export KIBANA_URL=$(jq -r --arg r "$REGION" '.[$r].endpoints.kibana' /tmp/project_results.json)
+export ES_URL=$(jq    -r --arg r "$REGION" '.[$r].endpoints.elasticsearch' /tmp/project_results.json)
+export ELASTICSEARCH_PASSWORD=$(jq -r --arg r "$REGION" '.[$r].credentials.password' /tmp/project_results.json)
+
+# Store in Instruqt agent variables so challenge scripts can access them
+agent variable set ES_KIBANA_URL "$KIBANA_URL"
+agent variable set ES_URL "$ES_URL"
+agent variable set ES_USERNAME "$(jq -r --arg r "$REGION" '.[$r].credentials.username' /tmp/project_results.json)"
+agent variable set ES_PASSWORD "$ELASTICSEARCH_PASSWORD"
+agent variable set ES_DEPLOYMENT_ID "$(jq -r --arg r "$REGION" '.[$r].id' /tmp/project_results.json)"
+
+# ── Generate API key ───────────────────────────────────────────────────────────
+echo "Generating Elastic API key..."
+API_KEY_RESPONSE=$(curl -s -u "admin:${ELASTICSEARCH_PASSWORD}" \
+    "$ES_URL/_security/api_key" \
+    -H 'Content-Type: application/json' \
+    -d '{"name":"exxon-demo"}')
+ELASTICSEARCH_API_KEY=$(echo "$API_KEY_RESPONSE" | jq -r '.encoded // empty')
+[ -z "$ELASTICSEARCH_API_KEY" ] && { echo "WARN: Could not generate API key — learners can generate one manually"; }
+agent variable set ES_API_KEY    "$ELASTICSEARCH_API_KEY"
+agent variable set ELASTIC_API_KEY "$ELASTICSEARCH_API_KEY"
+
+# ── Configure nginx as Kibana reverse proxy on :8080 ─────────────────────────
+echo "Configuring nginx..."
+BASE64=$(echo -n "admin:${ELASTICSEARCH_PASSWORD}" | base64)
+KIBANA_HOST=$(echo "$KIBANA_URL" | sed -e 's#http[s]\?://##g')
+
+cat > /etc/nginx/conf.d/default.conf << NGINX_EOF
+server {
+  listen 8080 default_server;
+  server_name kibana;
+
+  location /nginx_status {
+    stub_status on;
+    allow 127.0.0.1;
+    deny all;
+  }
+
+  location / {
+    proxy_pass                    ${KIBANA_URL};
+    proxy_set_header Host         ${KIBANA_HOST};
+    proxy_set_header Connection   "keep-alive";
+    proxy_hide_header Content-Security-Policy;
+    proxy_hide_header X-Frame-Options;
+    proxy_hide_header X-Content-Type-Options;
+    proxy_hide_header Strict-Transport-Security;
+    proxy_set_header X-Scheme             \$scheme;
+    proxy_set_header X-Forwarded-Proto    https;
+    proxy_set_header X-Forwarded-Host     \$host;
+    proxy_set_header X-Forwarded-For      \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Real-IP            \$remote_addr;
+    proxy_set_header Authorization        "Basic ${BASE64}";
+    proxy_set_header Accept-Encoding      "gzip, deflate, br";
+    proxy_set_header Accept               "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8";
+    proxy_set_header Accept-Language      "en-US,en;q=0.9";
+    proxy_set_header User-Agent           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+    proxy_set_header Sec-Fetch-Site       "none";
+    proxy_set_header Sec-Fetch-Mode       "navigate";
+    proxy_set_header Sec-Fetch-User       "?1";
+    proxy_set_header Sec-Fetch-Dest       "document";
+    proxy_set_header Upgrade-Insecure-Requests "1";
+    proxy_redirect          off;
+    proxy_http_version      1.1;
+    client_max_body_size    20M;
+    proxy_read_timeout      600;
+    proxy_buffering         off;
+    proxy_send_timeout      300;
+    send_timeout            300;
+    proxy_connect_timeout   300;
+  }
+}
+
+server {
+  listen 9200;
+  server_name elasticsearch;
+  location / {
+    proxy_pass ${ES_URL};
+    proxy_connect_timeout 300;
+    proxy_send_timeout    300;
+    proxy_read_timeout    300;
+    send_timeout          300;
+  }
+}
+NGINX_EOF
+
+systemctl restart nginx
+sleep 2
+systemctl is-active --quiet nginx && echo "nginx running on :8080 ✓" || { echo "ERROR: nginx failed"; exit 1; }
+
+# ── Clone exxon-demo and start the Demo App on :8090 ─────────────────────────
+DEMO_REPO="https://github.com/poulsbopete/exxon-demo.git"
+DEMO_DIR="/opt/exxon-demo"
+DEMO_PORT=8090
+
+echo "Cloning exxon-demo..."
+if [[ -d "$DEMO_DIR" ]]; then
+    git -C "$DEMO_DIR" pull --ff-only 2>/dev/null || true
+else
+    git clone "$DEMO_REPO" "$DEMO_DIR"
+fi
+
+echo "Installing Python dependencies..."
+PKGS_DIR="$DEMO_DIR/packages"
+mkdir -p "$PKGS_DIR"
+curl -fsSL https://bootstrap.pypa.io/get-pip.py | python3 - --target="$PKGS_DIR" --quiet 2>/dev/null || true
+PYTHONPATH="$PKGS_DIR" python3 -m pip install \
+    --target="$PKGS_DIR" --prefer-binary --quiet \
+    -r "$DEMO_DIR/requirements.txt"
+mkdir -p "$DEMO_DIR/data"
+
+echo "Creating systemd service for Exxon demo app (port $DEMO_PORT)..."
+cat > /etc/systemd/system/exxon-demo.service << SVCEOF
+[Unit]
+Description=Exxon Infrastructure 2.0 — Elastic Launch Demo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${DEMO_DIR}
+Environment=PATH=${DEMO_DIR}/packages/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=${DEMO_DIR}/packages
+Environment=ACTIVE_SCENARIO=exxon
+ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${DEMO_PORT}
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=exxon-demo
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+systemctl daemon-reload
+systemctl enable exxon-demo
+systemctl start  exxon-demo
+
+echo "Waiting for demo app to become healthy on port $DEMO_PORT..."
+for i in $(seq 1 60); do
+    if curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1; then
+        echo "Demo app healthy after ${i}s ✓"
+        break
+    fi
+    [[ $i -eq 60 ]] && echo "WARN: Demo app did not become healthy after 60s"
+    sleep 1
+done
+
+# ── Auto-launch the Exxon scenario ────────────────────────────────────────────
+if [[ -n "$KIBANA_URL" && -n "$ELASTICSEARCH_API_KEY" ]]; then
+    echo "Auto-launching Exxon Infrastructure 2.0 scenario..."
+    curl -sf -X POST "http://localhost:${DEMO_PORT}/api/setup/launch" \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"scenario_id\": \"exxon\",
+          \"kibana_url\":  \"${KIBANA_URL}\",
+          \"api_key\":     \"${ELASTICSEARCH_API_KEY}\"
+        }" >/dev/null 2>&1 \
+        && echo "Exxon scenario launch requested ✓" \
+        || echo "WARN: Auto-launch failed — learners can launch manually via the Demo App tab"
+
+    # Wait for deployment to register
+    for i in $(seq 1 120); do
+        RUNNING=$(curl -sf "http://localhost:${DEMO_PORT}/api/deployments" 2>/dev/null \
+            | python3 -c "import sys,json; deps=json.load(sys.stdin); print(sum(1 for d in deps if d.get('running')))" 2>/dev/null || echo 0)
+        if [[ "$RUNNING" -ge 1 ]]; then
+            echo "Exxon scenario deployment active after ${i}s ✓"
+            break
+        fi
+        [[ $i -eq 120 ]] && echo "WARN: Deployment did not register after 240s"
+        sleep 2
+    done
+else
+    echo "WARN: Missing Kibana URL or API key — learners can launch manually via Demo App tab"
+fi
+
+# ── Convenience aliases ───────────────────────────────────────────────────────
+cat >> /root/.bashrc << 'BASH'
+
+# Exxon Demo aliases
+alias demo-logs="journalctl -u exxon-demo -f --no-pager"
+alias demo-status="curl -sf http://localhost:8090/api/status | python3 -m json.tool"
+alias demo-deployments="curl -sf http://localhost:8090/api/deployments | python3 -m json.tool"
+alias demo-chaos="curl -sf http://localhost:8090/api/chaos/status | python3 -m json.tool"
+alias demo-restart="systemctl restart exxon-demo && sleep 3 && curl -sf http://localhost:8090/health"
+alias kibana-url="agent variable get ES_KIBANA_URL"
+alias elastic-url="agent variable get ES_URL"
+BASH
+
+echo "Track setup complete ✓"
+echo "  Demo App  → http://localhost:8090"
+echo "  Kibana    → http://localhost:8080 (proxied)"
+echo "  ES URL    → $ES_URL"
+echo "  Kibana URL→ $KIBANA_URL"

@@ -25,21 +25,32 @@ notes:
     and ThousandEyes circuit data — no custom joins required. One ES|QL
     query, five data streams, five minutes to root cause.
 tabs:
-- id: amrpqgmy5wvf
+- id: yu5uxrvqaktm
   title: Terminal
   type: terminal
-  hostname: shell
-- id: n8romw6stvqw
-  title: Editor
-  type: code
-  hostname: shell
-  path: /root/exxon-eux
-- id: mrilphzzwkcj
-  title: Elastic
+  hostname: es3-api
+- id: 8d144pdk7xpp
+  title: Demo App
   type: service
-  hostname: shell
+  hostname: es3-api
   path: /
-  port: 80
+  port: 8090
+- id: ftzxguvojzh3
+  title: Elastic Serverless
+  type: service
+  hostname: es3-api
+  path: /app/observability/overview
+  port: 8080
+  custom_request_headers:
+  - key: Content-Security-Policy
+    value: 'script-src ''self'' https://kibana.estccdn.com; worker-src blob: ''self'';
+      style-src ''unsafe-inline'' ''self'' https://kibana.estccdn.com; style-src-elem
+      ''unsafe-inline'' ''self'' https://kibana.estccdn.com'
+  custom_response_headers:
+  - key: Content-Security-Policy
+    value: 'script-src ''self'' https://kibana.estccdn.com; worker-src blob: ''self'';
+      style-src ''unsafe-inline'' ''self'' https://kibana.estccdn.com; style-src-elem
+      ''unsafe-inline'' ''self'' https://kibana.estccdn.com'
 difficulty: intermediate
 timelimit: 2700
 enhanced_loading: null
