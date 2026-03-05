@@ -8,6 +8,8 @@ cross-team EUX investigations.
 
 from __future__ import annotations
 
+import random
+import time
 from typing import Any
 
 from scenarios.base import BaseScenario, CountdownConfig, UITheme
@@ -651,6 +653,102 @@ class ExxonScenario(BaseScenario):
                 ),
             },
         ]
+
+
+    # ── Service classes ───────────────────────────────────────────────────────
+    # Returns [] so the generic log generators handle telemetry; no space-themed
+    # service classes needed for Exxon.
+
+    def get_service_classes(self) -> list[type]:
+        return []
+
+    # ── Fault parameters ──────────────────────────────────────────────────────
+    # Provides Exxon-specific values consumed by chaos injection logic.
+
+    def get_fault_params(self, channel: int) -> dict[str, Any]:
+        return {
+            # OTel / APM
+            "error_rate_pct":      round(random.uniform(5.0, 25.0), 1),
+            "latency_p95_ms":      random.randint(800, 8000),
+            "pipeline_name":       random.choice(["datadog-log-ingest", "splunk-hec-forward", "otel-collector-azure"]),
+            "service_name":        random.choice(["api-gateway", "payment-processor", "inventory-service"]),
+            "dropped_spans":       random.randint(50, 2000),
+            # SNMP / network
+            "device_hostname":     random.choice(["cisco-sw-houston-01", "cisco-sw-midland-03", "cisco-sw-corpus-02"]),
+            "interface":           random.choice(["GigabitEthernet0/47", "TenGigabitEthernet1/0/1", "GigabitEthernet0/23"]),
+            "snmp_trap_type":      random.choice(["linkDown", "linkDown", "linkUp"]),
+            "circuit_jitter_ms":   round(random.uniform(20.0, 80.0), 1),
+            "circuit_loss_pct":    round(random.uniform(1.0, 8.0), 1),
+            "circuit_latency_ms":  random.randint(45, 200),
+            # AppGate / Zero Trust
+            "device_cert_days":    random.randint(0, 5),
+            "entitlement":         random.choice(["Audit-System-Full-Access", "Field-Data-Access", "Corporate-VPN"]),
+            "appgate_policy":      random.choice(["Field-Engineer-Standard", "Admin-Elevated", "Contractor"]),
+            # AVD / EUX
+            "avd_host":            random.choice(["avd-mid-w10-042", "avd-hou-w10-011", "avd-cor-w10-022"]),
+            "user_name":           random.choice(["jsmith", "awilliams", "bgarcia"]),
+            "logon_duration_s":    random.randint(20, 90),
+            "reconnect_count":     random.randint(3, 15),
+            "windows_event_id":    random.choice([4625, 4625, 7036, 1074]),
+            # Generic
+            "epoch":               int(time.time()) - random.randint(60, 3600),
+            "duration_ms":         random.randint(100, 30000),
+            "threshold_ms":        5000,
+            "site":                random.choice(["Houston-Refinery-Campus", "Midland-Field-Ops", "Corpus-Christi-Refinery"]),
+        }
+
+    # ── Assessment tool config ────────────────────────────────────────────────
+
+    @property
+    def assessment_tool_config(self) -> dict[str, Any]:
+        return {
+            "id": "exxon_infra2_assessment",
+            "description": (
+                "Infrastructure 2.0 unified observability assessment. Evaluates all "
+                "Exxon services against observability maturity criteria: OTel coverage, "
+                "SNMP-to-APM correlation, CMDB enrichment completeness, and EUX "
+                "monitoring coverage for Azure Virtual Desktop fleet. "
+                "Log message field: body.text (never use 'body' alone)."
+            ),
+        }
+
+    # ── DB operations ─────────────────────────────────────────────────────────
+    # Used by the MySQL log generator to simulate realistic query patterns.
+
+    @property
+    def db_operations(self) -> dict[str, list[tuple]]:
+        return {
+            "api-gateway": [
+                ("SELECT", "api_routes",
+                 "SELECT route_id, service_name, upstream_url FROM api_routes WHERE active = 1 AND region = ? LIMIT 50"),
+                ("INSERT", "api_access_log",
+                 "INSERT INTO api_access_log (trace_id, service, method, path, status, latency_ms, ts) VALUES (?, ?, ?, ?, ?, ?, NOW())"),
+            ],
+            "payment-processor": [
+                ("SELECT", "transactions",
+                 "SELECT txn_id, amount, currency, status FROM transactions WHERE created_at > ? AND status = 'pending' ORDER BY created_at DESC LIMIT 100"),
+                ("UPDATE", "transactions",
+                 "UPDATE transactions SET status = ?, updated_at = NOW() WHERE txn_id = ?"),
+            ],
+            "inventory-service": [
+                ("SELECT", "inventory",
+                 "SELECT item_id, sku, qty_available, location FROM inventory WHERE facility = ? AND qty_available > 0 LIMIT 200"),
+                ("INSERT", "inventory_events",
+                 "INSERT INTO inventory_events (item_id, event_type, delta_qty, operator, ts) VALUES (?, ?, ?, ?, NOW())"),
+            ],
+            "avd-broker": [
+                ("SELECT", "avd_sessions",
+                 "SELECT session_id, user_name, host_name, state, logon_ts FROM avd_sessions WHERE state = 'active' AND site = ?"),
+                ("UPDATE", "avd_sessions",
+                 "UPDATE avd_sessions SET last_seen = NOW(), reconnect_count = reconnect_count + 1 WHERE session_id = ?"),
+            ],
+            "network-monitor": [
+                ("SELECT", "snmp_devices",
+                 "SELECT device_id, hostname, ip, site, last_trap_ts FROM snmp_devices WHERE last_trap_ts > ? ORDER BY last_trap_ts DESC"),
+                ("INSERT", "trap_events",
+                 "INSERT INTO trap_events (device_id, trap_type, interface, oid, received_at) VALUES (?, ?, ?, ?, NOW())"),
+            ],
+        }
 
 
 # Module-level singleton — imported by scenarios/__init__.py discovery
