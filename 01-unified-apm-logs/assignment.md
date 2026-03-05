@@ -176,12 +176,25 @@ You will see output confirming three streams are active:
 
 ## Step 3 — Query Unified APM Traces in ES|QL
 
-Once data is flowing, open the ES|QL console and run the following query
-to see all services reporting traces in the last 15 minutes:
+Switch to the **Elastic Serverless** tab. In Kibana, go to
+**Discover → Change to ES|QL mode** (or **Dev Tools → Console**, then
+switch to ES|QL).
+
+> **Wait 60–90 seconds** after running `generate-telemetry.sh` for the
+> first documents to arrive. If you get "Unknown column" errors, the
+> index doesn't have data yet — try the warm-up query below first.
+
+**Warm-up — confirm data is arriving:**
 
 ```esql
-FROM traces-apm-* METADATA _index
-| WHERE @timestamp > NOW() - 15 minutes
+FROM logs-*,metrics-*,traces-*
+| LIMIT 5
+```
+
+If that returns rows, APM data is flowing. Then run the full query:
+
+```esql
+FROM traces-apm-*
 | STATS
     total_transactions = COUNT(*),
     p95_latency_ms     = PERCENTILE(transaction.duration.us, 95) / 1000,
@@ -194,9 +207,8 @@ FROM traces-apm-* METADATA _index
 | LIMIT 20
 ```
 
-You should see `exxon-azure-api-gateway`, `payment-processor-v2`, and
-`inventory-service-v3` — the three simulated Azure API services — alongside
-their p95 latency and error rates.
+You should see `api-gateway`, `payment-processor`, and `inventory-service`
+alongside their p95 latency and error rates.
 
 > **This is the view Exxon's app teams have never had.** Previously, error
 > rates lived in Datadog; latency percentiles were only visible to whoever
@@ -204,32 +216,21 @@ their p95 latency and error rates.
 
 ---
 
-## Step 4 — Bridge Traces and Container Metrics
+## Step 4 — Navigate to APM in the Elastic Serverless Tab
 
-Now run the **unified join query** — bridging APM service data with
-OpenShift container metrics using `service.name` as the common key:
+In the **Elastic Serverless** tab, click **APM** in the left nav. You will
+see the Exxon services populating the service inventory. Click
+**Service Map** to see the topology of:
 
-```bash
-cat /root/exxon-otel/queries/unified-service-query.esql
-```
+- `api-gateway` → `payment-processor` → `inventory-service`
+- All three reporting traces, latency, and error rate in one view
 
-Run that query in the ES|QL console. It joins:
-- `traces-apm-*` (error rates, latency from Azure API services)
-- `metrics-kubernetes.*` (CPU/memory from OpenShift pods)
+This replaces **three separate Datadog APM dashboards** — one per service
+team — with a single correlated service map.
 
-On a single service key: `service.name`.
-
-**Expected output columns:**
-
-| service.name | p95_latency_ms | error_rate_pct | pod_cpu_pct | pod_memory_mb |
-|---|---|---|---|---|
-| payment-processor-v2 | 342 | 4.2 | 87.3 | 1840 |
-| inventory-service-v3 | 118 | 0.8 | 22.1 | 512 |
-| exxon-azure-api-gateway | 89 | 0.3 | 31.4 | 768 |
-
-Notice `payment-processor-v2`: high latency **and** high CPU on its
-OpenShift pod. This correlation — impossible in Datadog+Splunk — is
-available instantly here.
+**Also check:** go to **Discover** and set the index pattern to
+`logs-*` to see application logs flowing from the same services, tagged
+with the same `service.name` — no Splunk required.
 
 ---
 
@@ -241,20 +242,23 @@ To complete this challenge, run the validation script:
 /root/exxon-otel/check-unified-tags.sh
 ```
 
-The script queries the mock Elastic endpoint and verifies that:
-1. All three index patterns (`traces-apm-*`, `metrics-kubernetes.*`, `logs-apm-*`) contain data
-2. At least one document in each index shares a common `service.name` value
-3. The `service.name` field is present as a resource attribute (OTel semantic convention)
+The script verifies the Exxon scenario is running and queries Elastic to
+confirm telemetry is arriving. Data can take **1–3 minutes** to appear
+after `generate-telemetry.sh` runs — if checks fail, wait and retry.
 
 A successful validation prints:
 
 ```
-✓ traces-apm-*           → 3 services found
-✓ metrics-kubernetes.*   → 3 services found
-✓ logs-apm-*             → 3 services found
-✓ Unified tag: service.name bridges all three signal types
-✓ Challenge 1 complete — unified APM and logs with OTel
+  ✓ Exxon scenario is active
+  ✓ traces-apm-*           → N documents
+  ✓ metrics-kubernetes.*   → N documents
+  ✓ logs-apm-*             → N documents
+  ✓ Challenge 1 complete — unified APM and logs with OTel
 ```
+
+> **If you see "0 documents":** Data is still in transit. Wait 60 seconds
+> and run `check-unified-tags.sh` again. The scenario sends data
+> continuously so it will arrive.
 
 ---
 
