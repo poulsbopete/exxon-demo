@@ -390,7 +390,75 @@ async def chaos_trigger(body: dict):
     )
     if inst.dashboard_ws:
         await inst.dashboard_ws.broadcast_status(inst.chaos_controller, inst.service_manager)
+
+    # Immediately emit fault ERROR logs so alert rules fire within 1 minute.
+    # We fire-and-forget in a background thread to keep the HTTP response fast.
+    try:
+        import threading as _threading
+        _threading.Thread(
+            target=_emit_fault_logs,
+            args=(inst, channel),
+            daemon=True,
+        ).start()
+    except Exception as _exc:
+        logger.warning("fault-log emit failed to start: %s", _exc)
+
     return result
+
+
+def _emit_fault_logs(inst, channel: int, repeat: int = 3, interval: float = 20.0) -> None:
+    """Send ERROR logs for an active fault channel (called in background thread).
+
+    Sends `repeat` bursts spaced `interval` seconds apart so the alert rule
+    (1-minute window, 1-minute schedule) has data to match within the first cycle.
+    """
+    import time as _time
+    import random as _random
+
+    try:
+        ctx = getattr(inst, "ctx", None)
+        sm = getattr(inst, "service_manager", None)
+        if not sm or not ctx:
+            return
+
+        channel_registry = ctx.channel_registry or {}
+        services = ctx.services or {}
+        namespace = ctx.namespace or "demo"
+        ch = channel_registry.get(channel, {})
+        if not ch:
+            return
+
+        error_type = ch.get("error_type", "unknown")
+        log_messages = ch.get("log_messages", [])
+        affected = ch.get("affected_services", [])
+        service_name = affected[0] if affected else "fault-emitter"
+
+        _fallback_svc_cfg = {
+            "cloud_provider": "azure",
+            "cloud_platform": "azure_vm",
+            "cloud_region": "eastus",
+            "cloud_availability_zone": "eastus-1",
+            "language": "python",
+        }
+        svc_cfg = services.get(service_name, _fallback_svc_cfg)
+
+        for _ in range(repeat):
+            msg = _random.choice(log_messages) if log_messages else error_type
+            resource = sm.otlp.build_resource(service_name, svc_cfg, namespace)
+            record = sm.otlp.build_log_record(
+                severity="ERROR",
+                body=f"[fault-channel-{channel}] {error_type}: {msg}",
+                attributes={
+                    "fault.channel": channel,
+                    "fault.error_type": error_type,
+                    "fault.name": ch.get("name", ""),
+                    "service.name": service_name,
+                },
+            )
+            sm.otlp.send_logs(resource, [record])
+            _time.sleep(interval)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("_emit_fault_logs error: %s", exc)
 
 
 @app.post("/api/chaos/resolve")

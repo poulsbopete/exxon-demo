@@ -1415,7 +1415,7 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                 "query": {
                     "bool": {
                         "filter": [
-                            {"range": {"@timestamp": {"gte": "now-5m"}}},
+                            {"range": {"@timestamp": {"gte": "now-1m"}}},
                             {"term": {"severity_text": "ERROR"}},
                         ],
                         "should": [
@@ -1432,7 +1432,7 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                 "rule_type_id": ".es-query",
                 "consumer": "alerts",
                 "tags": [self.ns, error_type],
-                "schedule": {"interval": "5m"},
+                "schedule": {"interval": "1m"},
                 "params": {
                     "searchType": "esQuery",
                     "esQuery": es_query,
@@ -1441,7 +1441,7 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                     "threshold": [0],
                     "thresholdComparator": ">",
                     "size": 100,
-                    "timeWindowSize": 5,
+                    "timeWindowSize": 1,
                     "timeWindowUnit": "m",
                 },
                 "actions": [{

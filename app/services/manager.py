@@ -133,7 +133,6 @@ class ServiceManager:
                 affected = ch.get("affected_services", [])
                 service_name = affected[0] if affected else "fault-emitter"
 
-                # Pick one of the channel's real log messages (or fall back to error_type)
                 msg = _random.choice(log_messages) if log_messages else error_type
 
                 svc_cfg = services.get(service_name, _fallback_svc_cfg)
@@ -153,7 +152,8 @@ class ServiceManager:
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("fault-log-emitter: send failed: %s", exc)
 
-            self._stop_event.wait(30)
+            # 20s cadence: within a 1-minute alert window we send 3 logs per channel
+            self._stop_event.wait(20)
 
     def _start_generators(self) -> None:
         """Start log/trace/metrics generators as daemon threads."""
