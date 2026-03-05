@@ -1,0 +1,223 @@
+slug: elastic-exxon-serverless-observability
+version: "3"
+title: "Elastic Serverless for Exxon: Infrastructure 2.0 Unified Observability"
+teaser: >-
+  Consolidate Datadog, Splunk, OpenNMS, and ThousandEyes into one
+  Elastic Serverless platform — from OTel-instrumented Azure API services
+  and OpenShift Kubernetes all the way to legacy SNMP traps and end-user
+  desktop experience monitoring.
+description: |
+  ## The Challenge
+
+  Exxon's observability landscape is fragmented across four tools — Datadog
+  (metrics & APM), Splunk (application logs), OpenNMS (network monitoring),
+  and ThousandEyes on Cisco switches — with no single view of how the
+  environment affects end users. Log pipelines in Datadog are failing to
+  create, 1,000 Azure API service instances produce "messy" APM data that
+  nobody knows how to act on, and SNMP traps from legacy Cisco infrastructure
+  are isolated from modern OpenShift/Kubernetes metrics.
+
+  ## What You Will Build
+
+  In this three-challenge track you will stand up an **Elastic Serverless**
+  project and progressively unify every data stream into one platform:
+
+  1. **Unified APM & Logs with OpenTelemetry** — replace the fragmented
+     Datadog/Splunk pipeline with native OTel ingest into Elastic Serverless.
+  2. **Legacy Network Infrastructure (SNMP)** — ingest Cisco SNMP traps and
+     correlate them with ServiceNow CMDB data.
+  3. **Single Pane of Glass for End-User Experience** — investigate an
+     end-user issue spanning Azure Virtual Desktop, iboss, and AppGate Zero
+     Trust using a unified Elastic dashboard.
+
+  ## Target Audience
+
+  Exxon Infrastructure 2.0 engineering team, pre-sales SEs, and Elastic
+  solution architects evaluating Elastic Serverless for consolidated
+  observability.
+
+icon: https://static-www.elastic.co/v8/assets/blobs/icons/elastic-logo.svg
+
+tags:
+  - elastic
+  - serverless
+  - observability
+  - apm
+  - opentelemetry
+  - snmp
+  - kubernetes
+  - end-user-experience
+  - exxon
+  - infrastructure-2.0
+
+owner: elastic
+
+developers:
+  - psimkins@elastic.co
+
+show_timer: false
+
+challenges:
+  - slug: unified-apm-logs
+    id: 3f8a1c2d-e54b-4f0a-b9c7-1a2e3d4f5678
+    type: challenge
+    title: "Challenge 1: Unifying Modern APM and Logs with OTel"
+    teaser: >-
+      Replace fragmented Datadog/Splunk pipelines with native OpenTelemetry
+      ingest into Elastic Serverless — bridging 1,000 Azure API service
+      instances and OpenShift Kubernetes in one query.
+    notes:
+      - type: text
+        title: "Exxon's Problem: Messy APM and Broken Log Pipelines"
+        content: |
+          Exxon runs **1,000 application instances** in Azure API Services,
+          each emitting traces and metrics. Today these land in Datadog (traces)
+          and Splunk (logs) — two tools with no common service identity.
+
+          Log pipelines in Datadog are **failing to create**, and the OTel
+          collector configurations that were meant to fix this are orphaned —
+          "nobody knows what to do with OpenTelemetry."
+
+          Elastic Serverless accepts the **OpenTelemetry Line Protocol (OTLP)**
+          natively over HTTP with zero pipeline code. In this challenge you will:
+
+          - Start a mock OTel collector that simulates Azure API service traces
+            and OpenShift Kubernetes container metrics
+          - Push both data streams to a local Elastic mock endpoint
+          - Write an ES|QL query that **joins** service-level trace data with
+            container metrics using a shared `service.name` tag — the unified
+            view Exxon has never had
+      - type: text
+        title: Key Elastic Capability
+        content: |
+          **Elastic Serverless OTLP Endpoint** accepts logs, metrics, and
+          traces in a single ingest path — no Logstash pipelines, no custom
+          index templates, no per-team Datadog dashboards to maintain.
+
+          The `service.name` resource attribute from OTel becomes the unifying
+          key across APM traces (`traces-apm-*`), infrastructure metrics
+          (`metrics-*`), and application logs (`logs-*`).
+    tabs:
+      - title: Terminal
+        type: terminal
+        hostname: sandbox
+      - title: Editor
+        type: code
+        hostname: sandbox
+        path: /root/exxon-otel
+    difficulty: basic
+    timelimit: 1800
+
+  - slug: legacy-snmp-network
+    id: 7b2c3d4e-f65a-4b1c-c0d8-2b3f4e5a6789
+    type: challenge
+    title: "Challenge 2: Taming Legacy Network Infrastructure (SNMP)"
+    teaser: >-
+      Stop treating Cisco SNMP traps as an island. Ingest legacy SNMP v2c
+      traps and enrich them with ServiceNow CMDB data so network events show
+      up in the same Elastic platform as your modern APM.
+    notes:
+      - type: text
+        title: "Exxon's Problem: Legacy SNMP Meets Modern Observability"
+        content: |
+          Exxon's network team monitors Cisco switches and routers via
+          **OpenNMS** receiving SNMP v2c traps and polling MIB OIDs. These
+          network events — link flaps, interface errors, BGP state changes —
+          are completely invisible to the application teams watching Datadog.
+
+          ThousandEyes agents on Cisco switches provide circuit-level
+          visibility, but again in isolation. When a circuit flaps, the WAN
+          team knows, but the app team doesn't — "it's very disjointed."
+
+          In this challenge you will:
+
+          - Configure the Elastic **SNMP integration** to receive simulated
+            Cisco `linkDown`/`linkUp` traps
+          - Enrich each trap with device metadata pulled from a **ServiceNow
+            CMDB** mock (hostname → site → application owner)
+          - Write an ES|QL query that surfaces every link-down event grouped
+            by site and the owning application team — so the app team sees
+            network events the moment they happen
+      - type: text
+        title: Key Elastic Capability
+        content: |
+          The **Elastic Network SNMP integration** (part of the Fleet
+          integrations catalog) listens for UDP SNMP traps and translates
+          OID values into human-readable field names using bundled MIB files.
+
+          **Runtime fields** and **enrich policies** let you join the
+          incoming trap data with a ServiceNow CMDB index at query time —
+          no ETL pipeline required.
+    tabs:
+      - title: Terminal
+        type: terminal
+        hostname: sandbox
+      - title: Editor
+        type: code
+        hostname: sandbox
+        path: /root/exxon-snmp
+    difficulty: intermediate
+    timelimit: 2400
+
+  - slug: single-pane-eux
+    id: 9d4e5f6a-b87c-4d2e-e1f9-3c4a5b6c7890
+    type: challenge
+    title: "Challenge 3: The Single Pane of Glass for End-User Experience"
+    teaser: >-
+      Answer Exxon's critical question — "How is the machine functioning for
+      the user?" — by investigating an Azure Virtual Desktop issue spanning
+      iboss connections, AppGate Zero Trust, and Windows event logs in one
+      unified Elastic dashboard.
+    notes:
+      - type: text
+        title: "Exxon's Problem: End-User Experience Black Hole"
+        content: |
+          Exxon manages **hundreds of Azure Virtual Desktop (AVD) sessions**
+          for field engineers. Desktop reliability is measured by three teams
+          in three tools:
+
+          - The **WAN team** watches ThousandEyes for circuit jitter and DNS
+            latency
+          - The **Security team** watches AppGate Zero Trust / iboss for
+            blocked connections
+          - The **Desktop team** watches Windows Event Logs for login failures
+            and profile errors
+
+          When a user reports "my desktop is slow," nobody has a single view.
+          The question "Is this AWS fallback latency, Jitter DNS from the WAN
+          team, or an AppGate policy block?" takes hours of cross-team
+          Slack threads to answer.
+
+          In this challenge you will use a **pre-built unified Elastic
+          dashboard** containing all three data streams and follow an
+          investigation workflow to identify the root cause of a user
+          session degradation.
+      - type: text
+        title: Key Elastic Capability
+        content: |
+          **Elastic Universal Profiling** and **Real User Monitoring (RUM)**
+          give per-session, per-user visibility. Combined with Windows
+          event log forwarding (Elastic Agent) and network flow data
+          (iboss integration), a single dashboard answers:
+
+          - Is the issue on the client (AVD profile load time)?
+          - Is it the network path (ThousandEyes jitter > 20 ms)?
+          - Is it security policy (AppGate connection refused / iboss block)?
+
+          All three signal types share `user.name` and `host.name` as
+          correlation keys — no custom joins required.
+    tabs:
+      - title: Terminal
+        type: terminal
+        hostname: sandbox
+      - title: Editor
+        type: code
+        hostname: sandbox
+        path: /root/exxon-eux
+      - title: Dashboard Preview
+        type: service
+        hostname: sandbox
+        path: /dashboard
+        port: 5601
+    difficulty: intermediate
+    timelimit: 2700

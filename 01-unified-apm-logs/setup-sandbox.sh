@@ -1,0 +1,536 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Challenge 1 Setup — Unified APM and Logs with OTel
+# Exxon Infrastructure 2.0 Demo — Elastic Serverless
+# =============================================================================
+set -euo pipefail
+
+WORK_DIR="/root/exxon-otel"
+MOCK_PORT=8200
+MOCK_KIBANA_PORT=5601
+LOG_DIR="/var/log/exxon-demo"
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+info()  { echo "[INFO]  $*"; }
+ok()    { echo "[OK]    $*"; }
+warn()  { echo "[WARN]  $*"; }
+die()   { echo "[ERROR] $*" >&2; exit 1; }
+
+# -----------------------------------------------------------------------------
+# 1. Install lightweight dependencies
+# -----------------------------------------------------------------------------
+info "Installing dependencies (jq, curl, python3, netcat)..."
+apt-get update -qq 2>/dev/null || yum install -yq jq curl python3 nc 2>/dev/null || true
+command -v jq   >/dev/null 2>&1 || die "jq is required but could not be installed."
+command -v curl >/dev/null 2>&1 || die "curl is required."
+ok "Dependencies ready"
+
+# -----------------------------------------------------------------------------
+# 2. Create working directories
+# -----------------------------------------------------------------------------
+info "Creating working directories..."
+mkdir -p "${WORK_DIR}/queries"
+mkdir -p "${LOG_DIR}"
+ok "Directories created at ${WORK_DIR}"
+
+# -----------------------------------------------------------------------------
+# 3. Write mock Elastic OTLP receiver (Python HTTP server)
+# -----------------------------------------------------------------------------
+info "Writing mock Elastic Serverless OTLP endpoint (port ${MOCK_PORT})..."
+cat > /root/mock-elastic.py << 'PYEOF'
+#!/usr/bin/env python3
+"""
+Mock Elastic Serverless OTLP endpoint.
+Accepts POST to any path, stores payloads in /var/log/exxon-demo/,
+and returns a valid OTLP HTTP success response.
+"""
+import http.server
+import json
+import os
+import time
+import threading
+from datetime import datetime
+
+LOG_DIR = "/var/log/exxon-demo"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# In-memory store keyed by signal type
+store = {"traces": [], "metrics": [], "logs": []}
+store_lock = threading.Lock()
+
+class MockElasticHandler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length)
+        try:
+            payload = json.loads(body)
+        except Exception:
+            payload = {"raw": body.decode(errors="replace")}
+
+        # Determine signal type from path
+        path = self.path.lower()
+        if "traces" in path:
+            signal = "traces"
+            index_pattern = "traces-apm-default"
+        elif "metrics" in path:
+            signal = "metrics"
+            index_pattern = "metrics-kubernetes.pod-default"
+        else:
+            signal = "logs"
+            index_pattern = "logs-apm-default"
+
+        # Extract service.name from OTel resource attributes
+        service_name = "unknown"
+        try:
+            resource_spans = payload.get("resourceSpans", []) or \
+                             payload.get("resourceMetrics", []) or \
+                             payload.get("resourceLogs", [])
+            if resource_spans:
+                attrs = resource_spans[0].get("resource", {}).get("attributes", [])
+                for attr in attrs:
+                    if attr.get("key") == "service.name":
+                        service_name = attr["value"].get("stringValue", "unknown")
+                        break
+        except Exception:
+            pass
+
+        doc = {
+            "@timestamp": datetime.utcnow().isoformat() + "Z",
+            "_index": index_pattern,
+            "service.name": service_name,
+            "signal": signal,
+            "payload_size_bytes": len(body),
+        }
+
+        with store_lock:
+            store[signal].append(doc)
+
+        # Persist to log file
+        log_path = os.path.join(LOG_DIR, f"{signal}.ndjson")
+        with open(log_path, "a") as f:
+            f.write(json.dumps(doc) + "\n")
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({"partialSuccess": {}}).encode())
+
+    def log_message(self, fmt, *args):
+        # Suppress default HTTP log spam
+        ts = datetime.utcnow().strftime("%H:%M:%S")
+        signal = args[0] if args else ""
+        print(f"[{ts}] OTLP {self.path} ← {self.address_string()} ({self.headers.get('Content-Length','?')} bytes)")
+
+
+def run_query_endpoint():
+    """Expose a simple /query endpoint on port 5601 for ES|QL simulations."""
+    import http.server as hs
+
+    class QueryHandler(hs.BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/health":
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"status":"green"}')
+                return
+            if self.path == "/query/unified":
+                with store_lock:
+                    services = {}
+                    for sig, docs in store.items():
+                        for d in docs:
+                            svc = d.get("service.name", "unknown")
+                            if svc not in services:
+                                services[svc] = set()
+                            services[svc].add(sig)
+                result = [
+                    {"service.name": svc, "signals": list(sigs)}
+                    for svc, sigs in services.items()
+                ]
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"results": result}).encode())
+                return
+            self.send_response(404)
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    hs.HTTPServer(("0.0.0.0", 5601), QueryHandler).serve_forever()
+
+
+if __name__ == "__main__":
+    import sys
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8200
+    t = threading.Thread(target=run_query_endpoint, daemon=True)
+    t.start()
+    print(f"[INFO] Mock Elastic OTLP endpoint listening on :{port}")
+    print(f"[INFO] Mock Kibana query endpoint listening on :5601")
+    http.server.HTTPServer(("0.0.0.0", port), MockElasticHandler).serve_forever()
+PYEOF
+chmod +x /root/mock-elastic.py
+ok "Mock Elastic endpoint written"
+
+# -----------------------------------------------------------------------------
+# 4. Start the mock Elastic endpoint as a background service
+# -----------------------------------------------------------------------------
+info "Starting mock Elastic OTLP endpoint on port ${MOCK_PORT}..."
+pkill -f "mock-elastic.py" 2>/dev/null || true
+nohup python3 /root/mock-elastic.py "${MOCK_PORT}" > "${LOG_DIR}/mock-elastic.log" 2>&1 &
+MOCK_PID=$!
+sleep 2
+
+# Health check
+if ! kill -0 "${MOCK_PID}" 2>/dev/null; then
+    die "Mock Elastic endpoint failed to start. Check ${LOG_DIR}/mock-elastic.log"
+fi
+ok "Mock Elastic endpoint running (PID ${MOCK_PID})"
+
+# -----------------------------------------------------------------------------
+# 5. Write OTel collector configuration
+# -----------------------------------------------------------------------------
+info "Writing OTel collector config..."
+cat > "${WORK_DIR}/otel-collector-config.yaml" << 'YAMLEOF'
+# =============================================================================
+# OpenTelemetry Collector Configuration — Exxon Azure API Services + OpenShift
+# Points to Elastic Serverless OTLP endpoint (mocked locally for this demo).
+# In production: replace http://localhost:8200 with your Elastic Cloud OTLP URL
+# and add the Authorization: ApiKey <key> header.
+# =============================================================================
+
+receivers:
+  # Simulates 1,000 Azure API Service instances generating traces
+  otlp/azure-api:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+  # Simulates Prometheus scrape of OpenShift pod metrics
+  prometheus/openshift:
+    config:
+      scrape_configs:
+        - job_name: openshift-pods
+          scrape_interval: 15s
+          static_configs:
+            - targets: ["localhost:9090"]
+              labels:
+                k8s.cluster.name: "openshift-prod"
+                k8s.namespace.name: "exxon-infrastructure"
+
+processors:
+  # Add Exxon-specific resource attributes to every span/metric/log
+  resource/exxon-tags:
+    attributes:
+      - action: insert
+        key: deployment.environment
+        value: "azure-prod"
+      - action: insert
+        key: organization
+        value: "exxon-infrastructure-2.0"
+      - action: insert
+        key: cost.center
+        value: "IT-OPS-INFRA2"
+
+  # Batch for efficiency (equivalent to Datadog agent batching)
+  batch:
+    send_batch_size: 1000
+    timeout: 5s
+
+exporters:
+  # Elastic Serverless OTLP endpoint — replaces Datadog agent + Splunk HEC
+  otlphttp/elastic:
+    endpoint: "http://localhost:8200"
+    headers:
+      Authorization: "ApiKey DEMO_KEY_REPLACE_IN_PRODUCTION"
+    compression: gzip
+
+  # Debug exporter — shows what would have gone to Splunk
+  logging/splunk-comparison:
+    loglevel: info
+
+service:
+  pipelines:
+    # Azure API service traces (replaces Datadog APM)
+    traces/azure-api:
+      receivers: [otlp/azure-api]
+      processors: [resource/exxon-tags, batch]
+      exporters: [otlphttp/elastic]
+
+    # OpenShift / Kubernetes metrics (replaces Datadog Agent on K8s)
+    metrics/openshift:
+      receivers: [prometheus/openshift]
+      processors: [resource/exxon-tags, batch]
+      exporters: [otlphttp/elastic]
+
+    # Application logs (replaces Splunk forwarder + HEC)
+    logs/splunk-forward:
+      receivers: [otlp/azure-api]
+      processors: [resource/exxon-tags, batch]
+      exporters: [otlphttp/elastic, logging/splunk-comparison]
+YAMLEOF
+ok "OTel collector config written"
+
+# -----------------------------------------------------------------------------
+# 6. Write ES|QL unified service query
+# -----------------------------------------------------------------------------
+info "Writing ES|QL unified join query..."
+cat > "${WORK_DIR}/queries/unified-service-query.esql" << 'ESQLEOF'
+// =============================================================================
+// Exxon Unified Service Query — ES|QL
+// Joins APM trace data with OpenShift container metrics on service.name.
+// Run this in Kibana Dev Tools or the ES|QL console.
+// =============================================================================
+FROM traces-apm-* METADATA _index
+| WHERE @timestamp > NOW() - 15 minutes
+| STATS
+    total_transactions = COUNT(*),
+    p95_latency_ms     = PERCENTILE(transaction.duration.us, 95) / 1000,
+    error_rate_pct     = ROUND(
+                           100.0 * COUNT_IF(event.outcome == "failure") / COUNT(*),
+                           2
+                         )
+  BY service.name, deployment.environment
+| SORT error_rate_pct DESC
+| LIMIT 20
+
+// To join with container metrics (requires cross-index LOOKUP in ES|QL 8.13+):
+// FROM traces-apm-* METADATA _index
+// | LOOKUP metrics-kubernetes.pod-* ON service.name
+// | STATS p95_latency_ms = PERCENTILE(transaction.duration.us,95)/1000,
+//         avg_pod_cpu    = AVG(kubernetes.pod.cpu.usage.nanocores) / 1e6
+//   BY service.name
+// | SORT p95_latency_ms DESC
+ESQLEOF
+ok "ES|QL query written"
+
+# -----------------------------------------------------------------------------
+# 7. Write telemetry generation script (simulates OTel collector sending data)
+# -----------------------------------------------------------------------------
+info "Writing telemetry generator script..."
+cat > "${WORK_DIR}/generate-telemetry.sh" << 'GENEOF'
+#!/usr/bin/env bash
+# =============================================================================
+# Telemetry Generator — simulates OTel collector output for:
+#   - Azure API service traces (exxon-azure-api-gateway, payment-processor-v2,
+#                                inventory-service-v3)
+#   - OpenShift pod metrics (same services as K8s pods)
+#   - Splunk-style app logs forwarded as OTLP
+#
+# Sends to mock Elastic OTLP endpoint on localhost:8200
+# =============================================================================
+set -euo pipefail
+
+OTLP_URL="http://localhost:8200"
+SERVICES=("exxon-azure-api-gateway" "payment-processor-v2" "inventory-service-v3")
+POD_CPU=(31 87 22)      # simulated CPU % for each service
+POD_MEM=(768 1840 512)  # simulated memory MB for each service
+
+send_trace() {
+    local service="$1"
+    local latency_us=$(( RANDOM % 400000 + 50000 ))
+    local outcome=$( [[ $(( RANDOM % 10 )) -lt 2 ]] && echo "failure" || echo "success" )
+    local now_ns=$(date +%s%N 2>/dev/null || echo "1700000000000000000")
+
+    curl -sf -X POST "${OTLP_URL}/v1/traces" \
+        -H "Content-Type: application/json" \
+        -d "{
+  \"resourceSpans\": [{
+    \"resource\": {
+      \"attributes\": [
+        {\"key\": \"service.name\",          \"value\": {\"stringValue\": \"${service}\"}},
+        {\"key\": \"deployment.environment\", \"value\": {\"stringValue\": \"azure-prod\"}},
+        {\"key\": \"organization\",           \"value\": {\"stringValue\": \"exxon-infrastructure-2.0\"}}
+      ]
+    },
+    \"scopeSpans\": [{
+      \"spans\": [{
+        \"traceId\": \"$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 32)\",
+        \"spanId\":  \"$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 16)\",
+        \"name\": \"HTTP POST /api/v2/transaction\",
+        \"startTimeUnixNano\": \"${now_ns}\",
+        \"endTimeUnixNano\":   \"$(( now_ns + latency_us * 1000 ))\",
+        \"status\": {\"code\": $( [[ \"${outcome}\" == \"failure\" ]] && echo 2 || echo 0 )},
+        \"attributes\": [
+          {\"key\": \"event.outcome\",   \"value\": {\"stringValue\": \"${outcome}\"}},
+          {\"key\": \"http.method\",     \"value\": {\"stringValue\": \"POST\"}},
+          {\"key\": \"http.status_code\",\"value\": {\"intValue\": $( [[ \"${outcome}\" == \"failure\" ]] && echo 500 || echo 200 )}}
+        ]
+      }]
+    }]
+  }]
+}" > /dev/null 2>&1 && echo "[INFO] Sending traces  → ${OTLP_URL}/v1/traces  (service: ${service})" || true
+}
+
+send_metrics() {
+    local service="$1"
+    local cpu="$2"
+    local mem="$3"
+
+    curl -sf -X POST "${OTLP_URL}/v1/metrics" \
+        -H "Content-Type: application/json" \
+        -d "{
+  \"resourceMetrics\": [{
+    \"resource\": {
+      \"attributes\": [
+        {\"key\": \"service.name\",       \"value\": {\"stringValue\": \"${service}\"}},
+        {\"key\": \"k8s.cluster.name\",   \"value\": {\"stringValue\": \"openshift-prod\"}},
+        {\"key\": \"k8s.namespace.name\", \"value\": {\"stringValue\": \"exxon-infrastructure\"}}
+      ]
+    },
+    \"scopeMetrics\": [{
+      \"metrics\": [
+        {
+          \"name\": \"kubernetes.pod.cpu.usage\",
+          \"gauge\": {\"dataPoints\": [{\"asDouble\": ${cpu}, \"timeUnixNano\": \"$(date +%s%N 2>/dev/null || echo 1700000000000000000)\"}]}
+        },
+        {
+          \"name\": \"kubernetes.pod.memory.usage_bytes\",
+          \"gauge\": {\"dataPoints\": [{\"asDouble\": $(( mem * 1048576 )), \"timeUnixNano\": \"$(date +%s%N 2>/dev/null || echo 1700000000000000000)\"}]}
+        }
+      ]
+    }]
+  }]
+}" > /dev/null 2>&1 && echo "[INFO] Sending metrics → ${OTLP_URL}/v1/metrics  (k8s.cluster.name: openshift-prod, service: ${service})" || true
+}
+
+send_log() {
+    local service="$1"
+    local messages=(
+        "WARN  TransactionService - Retry attempt 3 for upstream payment gateway"
+        "ERROR InventoryService  - Connection pool exhausted: max=100 active=100"
+        "INFO  ApiGateway        - Circuit breaker OPEN for downstream: inventory-service-v3"
+        "WARN  PaymentProcessor  - Latency SLO breach: p95=342ms threshold=200ms"
+    )
+    local msg="${messages[$((RANDOM % ${#messages[@]}))]}"
+
+    curl -sf -X POST "${OTLP_URL}/v1/logs" \
+        -H "Content-Type: application/json" \
+        -d "{
+  \"resourceLogs\": [{
+    \"resource\": {
+      \"attributes\": [
+        {\"key\": \"service.name\",          \"value\": {\"stringValue\": \"${service}\"}},
+        {\"key\": \"deployment.environment\", \"value\": {\"stringValue\": \"azure-prod\"}}
+      ]
+    },
+    \"scopeLogs\": [{
+      \"logRecords\": [{
+        \"timeUnixNano\": \"$(date +%s%N 2>/dev/null || echo 1700000000000000000)\",
+        \"severityText\": \"WARN\",
+        \"body\": {\"stringValue\": \"${msg}\"}
+      }]
+    }]
+  }]
+}" > /dev/null 2>&1 && echo "[INFO] Sending logs    → ${OTLP_URL}/v1/logs    (service: ${service})" || true
+}
+
+echo "============================================================"
+echo "  Exxon OTel Telemetry Generator"
+echo "  Simulating: Azure API services + OpenShift K8s"
+echo "  Target: ${OTLP_URL} (mock Elastic Serverless OTLP)"
+echo "============================================================"
+
+for i in "${!SERVICES[@]}"; do
+    svc="${SERVICES[$i]}"
+    send_trace   "${svc}"
+    send_metrics "${svc}" "${POD_CPU[$i]}" "${POD_MEM[$i]}"
+    send_log     "${svc}"
+    sleep 0.2
+done
+
+echo ""
+echo "Data sent. Verify with:"
+echo "  curl -s http://localhost:5601/query/unified | jq ."
+GENEOF
+chmod +x "${WORK_DIR}/generate-telemetry.sh"
+ok "Telemetry generator written"
+
+# -----------------------------------------------------------------------------
+# 8. Write validation script (used by check-sandbox.sh)
+# -----------------------------------------------------------------------------
+info "Writing validation script..."
+cat > "${WORK_DIR}/check-unified-tags.sh" << 'CHECKEOF'
+#!/usr/bin/env bash
+# =============================================================================
+# Validation — Challenge 1: Unified Service Tags
+# Queries the mock Elastic endpoint and verifies that all three signal types
+# (traces, metrics, logs) share at least one common service.name value.
+# =============================================================================
+set -euo pipefail
+
+QUERY_URL="http://localhost:5601/query/unified"
+PASS=0
+FAIL=0
+
+check() {
+    local desc="$1"
+    local condition="$2"
+    if eval "${condition}"; then
+        echo "✓ ${desc}"
+        PASS=$(( PASS + 1 ))
+    else
+        echo "✗ ${desc}"
+        FAIL=$(( FAIL + 1 ))
+    fi
+}
+
+echo ""
+echo "========================================="
+echo "  Challenge 1 Validation"
+echo "========================================="
+
+# Fetch unified query result
+RESULT=$(curl -sf "${QUERY_URL}" 2>/dev/null) || {
+    echo "✗ Cannot reach mock Elastic endpoint at ${QUERY_URL}"
+    echo "  Ensure generate-telemetry.sh has been run."
+    exit 1
+}
+
+TRACES_SVC=$(echo "${RESULT}"  | jq '[.results[] | select(.signals | contains(["traces"]))] | length')
+METRICS_SVC=$(echo "${RESULT}" | jq '[.results[] | select(.signals | contains(["metrics"]))] | length')
+LOGS_SVC=$(echo "${RESULT}"    | jq '[.results[] | select(.signals | contains(["logs"]))] | length')
+
+UNIFIED_SVC=$(echo "${RESULT}" | jq '[.results[] | select((.signals | contains(["traces"])) and (.signals | contains(["metrics"])))] | length')
+
+check "traces-apm-*           → ${TRACES_SVC} service(s) found"  "[[ ${TRACES_SVC} -ge 1 ]]"
+check "metrics-kubernetes.*   → ${METRICS_SVC} service(s) found" "[[ ${METRICS_SVC} -ge 1 ]]"
+check "logs-apm-*             → ${LOGS_SVC} service(s) found"    "[[ ${LOGS_SVC} -ge 1 ]]"
+check "Unified tag: service.name bridges traces + metrics (${UNIFIED_SVC} service(s))" "[[ ${UNIFIED_SVC} -ge 1 ]]"
+
+echo ""
+if [[ ${FAIL} -eq 0 ]]; then
+    echo "✓ Challenge 1 complete — unified APM and logs with OTel"
+    exit 0
+else
+    echo "✗ ${FAIL} check(s) failed. Run ./generate-telemetry.sh and try again."
+    exit 1
+fi
+CHECKEOF
+chmod +x "${WORK_DIR}/check-unified-tags.sh"
+ok "Validation script written"
+
+# -----------------------------------------------------------------------------
+# 9. Generate an initial batch of telemetry so data is ready immediately
+# -----------------------------------------------------------------------------
+info "Pre-loading initial telemetry batch..."
+sleep 1
+bash "${WORK_DIR}/generate-telemetry.sh" > "${LOG_DIR}/initial-telemetry.log" 2>&1 || warn "Initial telemetry batch had warnings (check ${LOG_DIR}/initial-telemetry.log)"
+ok "Initial telemetry loaded"
+
+# -----------------------------------------------------------------------------
+# Done
+# -----------------------------------------------------------------------------
+echo ""
+echo "================================================================"
+echo "  Challenge 1 environment ready."
+echo "  Working directory : ${WORK_DIR}"
+echo "  Mock OTLP endpoint: http://localhost:${MOCK_PORT}"
+echo "  Mock Kibana query : http://localhost:${MOCK_KIBANA_PORT}/query/unified"
+echo "  Start telemetry   : ${WORK_DIR}/generate-telemetry.sh"
+echo "  Validate          : ${WORK_DIR}/check-unified-tags.sh"
+echo "================================================================"
