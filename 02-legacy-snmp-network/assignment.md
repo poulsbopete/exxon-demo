@@ -79,21 +79,17 @@ notes:
     For Exxon's estate of **hundreds of Cisco devices**, this eliminates
     an entire tool and its operational overhead.
 tabs:
-- id: 4lxqmpxckh5p
-  title: Terminal
-  type: terminal
-  hostname: es3-api
-- id: zjyfrxv8lhfa
+- id: 5hcn3kt9phei
   title: Demo App
   type: service
   hostname: es3-api
   path: /
   port: 8090
-- id: 1mwg7lywnkoo
+- id: tpgjkiktcvye
   title: Elastic Serverless
   type: service
   hostname: es3-api
-  path: /app/dashboards#/list?_g=(filters:!(),refreshInterval:(pause:!f,value:30000),time:(from:now-30m,to:now))
+  path: /app/discover
   port: 8080
   custom_request_headers:
   - key: Content-Security-Policy
@@ -105,8 +101,8 @@ tabs:
     value: 'script-src ''self'' https://kibana.estccdn.com; worker-src blob: ''self'';
       style-src ''unsafe-inline'' ''self'' https://kibana.estccdn.com; style-src-elem
       ''unsafe-inline'' ''self'' https://kibana.estccdn.com'
-difficulty: intermediate
-timelimit: 2400
+difficulty: basic
+timelimit: 1800
 enhanced_loading: null
 ---
 
@@ -114,211 +110,123 @@ enhanced_loading: null
 
 ## The Situation
 
-Exxon's WAN team manages a campus of Cisco switches and routers that emit
-**SNMP v2c traps** the moment a link changes state. Today those traps are
-swallowed by **OpenNMS** — a tool only the network team can log into. When
-circuit flapping begins, the app team is the last to know.
+Exxon's WAN team monitors **hundreds of Cisco switches** at refineries across
+Texas — Houston, Midland, Corpus Christi. SNMP traps flow into OpenNMS.
+Application teams watch Datadog. **Neither tool can see the other.**
 
-ThousandEyes agents mounted on Cisco switches provide circuit-level visibility,
-but again in total isolation. The result: link-down events in the WAN are
-correlated to application errors in Splunk/Datadog **manually**, sometimes
-hours after the fact.
+When `cisco-sw-houston-01` flaps its `GigabitEthernet0/47` port, the WAN team
+gets an OpenNMS alert. The app team sees API errors spiking — but nobody
+connects the two events for 45 minutes.
 
-> **Goal:** Ingest Cisco SNMP traps into Elastic Serverless, enrich them with
-> ServiceNow CMDB device ownership data, and surface them in the same platform
-> as your APM data from Challenge 1.
+In this challenge, simulated SNMP traps and ServiceNow CMDB records have been
+loaded into your Elastic Serverless project automatically. Your task: explore
+this data and see how Elastic unifies the network and application layers.
 
 ---
 
-## Step 1 — Review the Simulated SNMP Trap Data
+## Step 1 — Trigger a Fault in the Demo App
 
-A mock **snmptrapd** process is sending simulated Cisco `linkDown` (OID
-`.1.3.6.1.6.3.1.1.5.3`) and `linkUp` (`.1.3.6.1.6.3.1.1.5.4`) traps to
-port `1620/UDP` on the sandbox. Review the trap stream:
+Switch to the **Demo App** tab. In the **Fault Injection** panel, you will see
+the 12 Exxon fault channels. Activate **Channel 5 — Cisco Circuit Flap
+(Houston Refinery)**:
 
-```bash
-cat /root/exxon-snmp/sample-traps.txt
-```
+1. Click **"Channel 5"** to expand it
+2. Click **"Inject Fault"**
+3. Watch the log stream — you will see `linkDown` events for
+   `cisco-sw-houston-01 GigabitEthernet0/47` appearing
 
-Each simulated trap includes:
-- `sysDescr` — device hostname (e.g., `cisco-sw-houston-01`)
-- `ifIndex` — interface index (e.g., `GigabitEthernet0/47`)
-- `ifOperStatus` — `1` (up) or `2` (down)
-- `enterprise` OID — Cisco-specific trap enterprise
-
-Notice the format. These are raw SNMP v2c traps — exactly what Exxon's
-production OpenNMS is receiving today, but is unable to correlate with
-application data.
+> **Presenter note:** This is what Exxon's NOC would see in Elastic
+> instead of OpenNMS. The same SNMP trap — now correlated with the APM
+> data showing api-gateway error rate climbing on the same timeline.
 
 ---
 
-## Step 2 — Review the Elastic SNMP Integration Config
+## Step 2 — Explore SNMP + CMDB Data in Kibana
 
-The Elastic **Network SNMP integration** config has been pre-generated at
-`/root/exxon-snmp/elastic-agent-snmp.yml`. Open it in the editor tab and
-review the key sections:
+Switch to the **Elastic Serverless** tab and navigate to **Discover**.
 
-```bash
-cat /root/exxon-snmp/elastic-agent-snmp.yml
+### 2a — Find the SNMP Trap Events
+
+In the index pattern selector, choose **`logs-snmp.trap-exxon`** (or search
+all logs with `logs*`). Filter for:
+
+```
+event.type : "linkDown"
 ```
 
-Key configuration points:
+You will see SNMP trap events for multiple Cisco switches across Houston,
+Midland, and Corpus Christi sites. Each event contains:
 
-| Parameter | Value | Notes |
-|---|---|---|
-| `listen_address` | `0.0.0.0:1620` | Receiving UDP traps |
-| `community` | `exxon-public` | v2c community string |
-| `translate_oids` | `true` | Converts OIDs to readable names |
-| `fields.network.site` | dynamic | Populated by enrich policy |
-| `output.elasticsearch.hosts` | your Elastic Serverless ES URL | From `agent variable get ES_URL` |
+| Field | Example Value |
+|---|---|
+| `device.hostname` | `cisco-sw-houston-01` |
+| `device.ip` | `10.12.5.22` |
+| `network.interface` | `GigabitEthernet0/47` |
+| `network.site` | `Houston-Refinery-Campus` |
+| `snmp.trap.type` | `linkDown` |
+
+### 2b — See the CMDB Enrichment
+
+Click any `linkDown` event and expand the document. Scroll to the CMDB fields:
+
+| Field | Example Value |
+|---|---|
+| `cmdb.asset_tag` | `CHG0043891` |
+| `cmdb.ci_class` | `Cisco Catalyst 9300` |
+| `application.owner` | `exxon-infrastructure-2.0-team` |
+| `business.service` | `Upstream-Operations` |
+| `thousandeyes.agent_id` | `TE-HOU-001` |
+
+> **This is the magic.** The SNMP trap came in with just an IP address.
+> Elastic's enrich policy joined it with the ServiceNow CMDB at query time
+> to show *which business service this switch supports* — no ETL, no JOIN
+> query, no manual lookup.
 
 ---
 
-## Step 3 — Load the ServiceNow CMDB Mock Data
+## Step 3 — Cross-Correlate: Network + APM on the Same Timeline
 
-In production, Exxon's ServiceNow CMDB maps every network device to a site,
-application owner, and business service. The Elastic **enrich policy** joins
-incoming SNMP trap documents to this CMDB data at query time.
+In the **Elastic Serverless** tab, navigate to **Dashboards** → open the
+**"Exxon Infrastructure 2.0 Executive Dashboard"**.
 
-Load the mock CMDB records:
+Find the **APM Errors Over Time** panel and the **Log Volume** panel. Notice
+that SNMP `linkDown` events and `api-gateway` error spikes share the same
+timestamp window.
 
-```bash
-cd /root/exxon-snmp
-./load-cmdb-data.sh
-```
+> **This is the unified timeline Exxon can't build today.** OpenNMS shows
+> the circuit flap. Datadog shows the API errors. Elastic shows both —
+> with the CMDB enrichment proving which switch caused which service impact.
 
-This script POSTs 12 device records directly to your Elastic Serverless instance under index
-`exxon-cmdb-devices`. Each record has:
-
-```json
-{
-  "device.hostname": "cisco-sw-houston-01",
-  "network.site":    "Houston-Refinery-Campus",
-  "application.owner": "exxon-infrastructure-2.0-team",
-  "business.service":  "Upstream-Operations",
-  "thousandeyes.agent_id": "TE-HOU-001"
-}
-```
-
-After loading, verify the CMDB index in Elastic Serverless:
-
-```bash
-ES_URL=$(agent variable get ES_URL)
-API_KEY=$(agent variable get ES_API_KEY)
-curl -s -H "Authorization: ApiKey $API_KEY" "$ES_URL/exxon-cmdb-devices/_count" | jq .
-```
-
-Expected: `{ "count": 12 }`
+Navigate to **Alerts** → **Rules** and find the alert rule for
+**"Channel 05: Cisco Circuit Flap — Houston Refinery"** — this rule would
+page the WAN team and the app team simultaneously from one platform.
 
 ---
 
-## Step 4 — Send Simulated SNMP Traps
+## Step 4 — Ask the AI Agent
 
-Run the trap generator to push simulated Cisco link events into the mock
-Elastic SNMP integration receiver:
+Navigate to **AI Agent** (search "Agent Builder") and ask the
+**exxon-infrastructure-analyst**:
 
-```bash
-cd /root/exxon-snmp
-./send-snmp-traps.sh
-```
+> *"Show me the SNMP circuit flap events and which application services
+> they are correlated with."*
 
-You will see output like:
+> *"What Cisco switch is flapping at the Houston refinery and what business
+> service does it support?"*
 
-```
-[INFO] Sending linkDown trap → cisco-sw-houston-01 (GigabitEthernet0/47) → site: Houston-Refinery-Campus
-[INFO] Sending linkDown trap → cisco-sw-midland-03 (TenGigabitEthernet1/0/1) → site: Midland-Field-Ops
-[INFO] Sending linkUp   trap → cisco-sw-houston-01 (GigabitEthernet0/47) → (recovered)
-[INFO] Sending linkDown trap → cisco-sw-corpus-02 (GigabitEthernet0/23) → site: Corpus-Christi-Refinery
-```
-
-> **This is circuit flapping.** Notice `cisco-sw-houston-01` flaps twice.
-> In the old world (OpenNMS only), nobody in the app team sees this.
-
----
-
-## Step 5 — Write the ES|QL Network Impact Query
-
-Now write the query that answers: **"Which application teams are affected by
-the current network events?"**
-
-Open the query file:
-
-```bash
-cat /root/exxon-snmp/queries/network-impact.esql
-```
-
-Review and understand the query. It:
-1. Reads from `logs-snmp.trap-*` (SNMP integration output index)
-2. Filters for `linkDown` events in the last 30 minutes
-3. Enriches with CMDB data (joins on `device.hostname`)
-4. Groups by `network.site` and `application.owner`
-
-The expected output:
-
-| network.site | application.owner | link_down_count | affected_interfaces |
-|---|---|---|---|
-| Houston-Refinery-Campus | exxon-infrastructure-2.0-team | 3 | GigabitEthernet0/47, ... |
-| Midland-Field-Ops | upstream-operations-team | 1 | TenGigabitEthernet1/0/1 |
-| Corpus-Christi-Refinery | downstream-logistics-team | 1 | GigabitEthernet0/23 |
-
-> **Presenter script:** "Exxon's WAN team already sees this in OpenNMS.
-> What's new is that the **app team** now sees it too — in the same Kibana
-> instance where they watch their APM traces from Challenge 1. No Slack
-> threads. No war room. One platform."
-
----
-
-## Step 6 — Configure the ThousandEyes Correlation
-
-Exxon has ThousandEyes agents on their Cisco switches. Each CMDB record
-includes a `thousandeyes.agent_id` field. Run the correlation query:
-
-```bash
-cat /root/exxon-snmp/queries/thousandeyes-correlation.esql
-```
-
-This query shows — for every `linkDown` event — the correlated
-ThousandEyes circuit-level metrics (packet loss %, jitter ms) that were
-active during the same time window. In a full Elastic Serverless deployment,
-this pulls from `logs-thousandeyes.*` via the Elastic ThousandEyes integration.
-
----
-
-## Step 7 — Validate
-
-Run the validation check:
-
-```bash
-/root/exxon-snmp/check-snmp-ingest.sh
-```
-
-The script verifies:
-1. CMDB data is loaded (12 device records)
-2. SNMP trap data landed in the mock index
-3. At least one trap document has been enriched with `network.site` from CMDB
-4. A `linkDown` event exists for at least 2 different sites
-
-Successful output:
-
-```
-✓ CMDB index loaded                → 12 device records
-✓ SNMP trap data received          → N trap events ingested
-✓ CMDB enrichment applied          → network.site populated
-✓ Multi-site link-down events      → 3 sites affected
-✓ Challenge 2 complete — SNMP tamed, network events visible to app teams
-```
+The agent uses ES|QL to join `logs-snmp.trap-exxon` with the CMDB data
+and cross-references `api-gateway` error logs — the same query that would
+take 45 minutes of manual cross-team investigation today.
 
 ---
 
 ## Why This Matters for Exxon
 
-| Before (OpenNMS isolated) | After (Elastic Serverless + SNMP integration) |
+| Before (OpenNMS + Datadog) | After (Elastic Serverless) |
 |---|---|
-| Network events visible only in OpenNMS | Network events in same Kibana as APM traces |
-| Manual cross-team correlation (hours) | ES|QL joins CMDB + SNMP in milliseconds |
-| ThousandEyes data siloed separately | ThousandEyes agent_id links to SNMP events |
-| No cost insight across storage engines | Unified retention policy in one platform |
+| SNMP traps in OpenNMS — invisible to app team | SNMP traps in same index as APM traces |
+| Manual CMDB lookup to identify device owner | Enrich policy joins CMDB at query time |
+| ThousandEyes data WAN-team-only | ThousandEyes `agent_id` correlated with SNMP and APM |
+| Separate alert rules in 3 tools | One Elastic alert rule notifies all teams |
 
-> Continue to Challenge 3 to see how this data, combined with Windows event
-> logs and AVD metrics, creates the complete **"How is the machine functioning
-> for the user?"** dashboard Exxon needs.
+> Continue to Challenge 3 — the full end-user experience investigation.

@@ -1,22 +1,31 @@
 #!/bin/bash
-# Challenge 2 setup — files already exist from track_scripts/setup-es3-api.
+# Challenge 2 setup — auto-load CMDB and SNMP trap data into Elastic Serverless.
+# Files were created by track_scripts/setup-es3-api at track start.
 DEMO_PORT=8090
 log() { printf "[challenge-2-setup] %s\n" "$*"; }
 
+# ── Wait for demo app ─────────────────────────────────────────────────────────
 for i in $(seq 1 10); do
-  curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1 && { log "Demo app healthy ✓"; exit 0; }
+  curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1 && { log "Demo app healthy ✓"; break; }
   sleep 2
+  [[ $i -eq 10 ]] && { log "WARN: Demo app not responding — attempting restart..."; systemctl restart exxon-demo 2>/dev/null || true; sleep 8; }
 done
 
-log "WARN: Demo app not responding — attempting restart..."
-systemctl restart exxon-demo 2>/dev/null || true
-sleep 8
-curl -sf "http://localhost:${DEMO_PORT}/health" >/dev/null 2>&1 \
-  && log "Demo app healthy after restart ✓" \
-  || log "WARN: App not healthy. Run: journalctl -u exxon-demo -n 50"
+# ── Auto-load CMDB device records ────────────────────────────────────────────
+if [[ -x /root/exxon-snmp/load-cmdb-data.sh ]]; then
+  log "Loading ServiceNow CMDB device records into Elastic..."
+  /root/exxon-snmp/load-cmdb-data.sh && log "CMDB data loaded ✓" || log "WARN: CMDB load had errors"
+else
+  log "WARN: /root/exxon-snmp/load-cmdb-data.sh not found"
+fi
 
-ls /root/exxon-snmp/sample-traps.txt >/dev/null 2>&1 \
-  && log "Challenge files ready ✓" \
-  || log "WARN: /root/exxon-snmp/ not found — track setup may still be running"
+# ── Auto-send simulated SNMP traps ───────────────────────────────────────────
+if [[ -x /root/exxon-snmp/send-snmp-traps.sh ]]; then
+  log "Sending simulated Cisco SNMP traps into Elastic..."
+  /root/exxon-snmp/send-snmp-traps.sh && log "SNMP traps sent ✓" || log "WARN: SNMP trap send had errors"
+else
+  log "WARN: /root/exxon-snmp/send-snmp-traps.sh not found"
+fi
 
+log "Challenge 2 environment ready."
 exit 0

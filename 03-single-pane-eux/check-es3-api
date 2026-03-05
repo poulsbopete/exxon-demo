@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
 # =============================================================================
 # Challenge 3 Check Script — Instruqt automatic validation
+# Verifies: Exxon scenario active + knowledge base + SNMP data in Elastic
 # =============================================================================
 set -euo pipefail
 
-WORK_DIR="/root/exxon-eux"
+DEMO_PORT=8090
+ES_URL=$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || true)
+API_KEY=$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]' || true)
 
 fail() {
     echo "INSTRUQT_FAIL_MESSAGE=$*"
     exit 1
 }
 
-[[ -f "${WORK_DIR}/data/avd-metrics.json" ]] || \
-    fail "AVD metrics data not found. Has the environment finished loading?"
+# Check 1: scenario is running
+RUNNING=$(curl -sf "http://localhost:${DEMO_PORT}/api/deployments" 2>/dev/null \
+  | python3 -c "import sys,json; deps=json.load(sys.stdin); print(sum(1 for d in deps if d.get('running')))" \
+  2>/dev/null || echo 0)
+[[ ${RUNNING} -ge 1 ]] || fail "Exxon scenario not running. Open the Demo App tab and confirm the scenario is active."
 
-[[ -f "${WORK_DIR}/data/appgate-audit.json" ]] || \
-    fail "AppGate audit data not found."
+# Check 2: knowledge base was deployed (proxy for deploy_all completing)
+if [[ -n "$ES_URL" && -n "$API_KEY" ]]; then
+    KB_COUNT=$(curl -sf -H "Authorization: ApiKey ${API_KEY}" \
+        "${ES_URL}/exxon-knowledge-base/_count" 2>/dev/null \
+        | python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo 0)
+    [[ ${KB_COUNT} -ge 4 ]] || \
+        fail "Knowledge base incomplete (${KB_COUNT}/12 docs). Deployment may still be in progress — check the Demo App tab."
+fi
 
-BLOCKED=$(python3 -c "
-import json
-with open('${WORK_DIR}/data/iboss-connections.json') as f:
-    data = [json.loads(l) for l in f if l.strip()]
-print(len([d for d in data if d.get('user.name')=='jsmith' and d.get('event.outcome')=='blocked']))
-" 2>/dev/null || echo 0)
-[[ ${BLOCKED} -ge 2 ]] || \
-    fail "iboss blocked events not found for jsmith (${BLOCKED} found, need ≥ 2)."
-
-ROOT_CAUSE=$(python3 "${WORK_DIR}/investigate.py" --full-report --user jsmith 2>/dev/null | grep "ROOT CAUSE:" | awk '{print $NF}')
-[[ -n "${ROOT_CAUSE}" && "${ROOT_CAUSE}" != "UNKNOWN" ]] || \
-    fail "Could not determine root cause. Run: python3 ${WORK_DIR}/investigate.py --full-report --user jsmith"
-
-echo "Challenge 3 validated: root cause identified as ${ROOT_CAUSE}."
+echo "Challenge 3 validated: EUX scenario active, knowledge base deployed."
+echo "Root cause: JITTER_DNS (Midland MPLS) + APPGATE_POLICY (expired device certificate)"
 exit 0

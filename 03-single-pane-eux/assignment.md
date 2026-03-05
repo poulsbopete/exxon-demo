@@ -70,11 +70,7 @@ notes:
     accessible to every team, from the NOC to the CISO, without
     extra tool licenses or per-seat costs.
 tabs:
-- id: yu5uxrvqaktm
-  title: Terminal
-  type: terminal
-  hostname: es3-api
-- id: 8d144pdk7xpp
+- id: 5hcn3kt9phei
   title: Demo App
   type: service
   hostname: es3-api
@@ -121,246 +117,137 @@ Without Elastic, it takes **45–90 minutes** of cross-team Slack threads to
 determine: Is this AWS fallback latency? Jitter DNS from the WAN team?
 An AppGate Zero Trust policy block?
 
-In this challenge, you will use the **pre-built unified Elastic dashboard**
-to answer this question in under 5 minutes.
+With Elastic Serverless, the answer is in the Demo App fault channels and
+the AI Agent — in under 5 minutes.
 
 ---
 
-## Step 1 — Generate the Simulated EUX Dataset
+## Step 1 — Inject the EUX Fault Scenario
 
-The setup script has pre-generated one hour of simulated telemetry for
-**user: `jsmith` on host: `avd-mid-w10-042`** — a field engineer's AVD
-session from the Midland office. Start the dashboard server:
+Switch to the **Demo App** tab. In the **Fault Injection** panel, activate
+the compounding EUX fault scenario. Inject these channels in sequence:
 
-```bash
-cd /root/exxon-eux
-./start-dashboard.sh
-```
+1. **Channel 6 — Midland MPLS Circuit Degradation**
+   - ThousandEyes agent TE-MID-001 detects jitter > 45ms
 
-Switch to the **Dashboard Preview** tab to open the Elastic-style dashboard.
+2. **Channel 9 — AppGate Device Certificate Expired**
+   - AppGate denies `Audit-System-Access` for `jsmith@exxon.com`
+   - iboss blocks `audit.exxon.internal` simultaneously
 
-Alternatively, explore the raw data files:
+3. **Channel 10 — Azure Virtual Desktop Session Storm**
+   - 14 Midland field engineers report AVD sessions disconnecting
+   - Logon times exceed 30 seconds (normal: < 5s)
 
-```bash
-ls /root/exxon-eux/data/
-```
+4. **Channel 11 — Windows Event ID 4625 Storm (Jitter DNS Auth Failure)**
+   - MPLS jitter causes Azure AD timeouts → account lockouts
 
-You will find:
-- `avd-metrics.json` — Azure Virtual Desktop session reliability metrics
-- `windows-events.json` — Forwarded Windows Security and Application events
-- `iboss-connections.json` — iboss connection log (allowed/blocked)
-- `appgate-audit.json` — AppGate Zero Trust policy evaluation log
-- `thousandeyes-metrics.json` — ThousandEyes circuit metrics (jitter, loss)
+Watch the fault log stream in the Demo App for all four signal types
+appearing simultaneously — **this is what Exxon's NOC would see in
+Elastic in real time, today they need 4 separate tool logins.**
 
 ---
 
-## Step 2 — Understand the Dashboard Panels
+## Step 2 — Open the Unified Dashboard
 
-The unified dashboard has five panels, each mapping to a previous tool:
+Switch to the **Elastic Serverless** tab. Navigate to **Dashboards** →
+**"Exxon Infrastructure 2.0 Executive Dashboard"**.
 
-### Panel A — AVD Session Health (was: manual Desktop team checks)
-Shows per-session metrics for all AVD hosts. Look at:
-- `session.logon_duration_ms` — how long did the session take to start?
-- `session.app_launch_ms` — application launch time
-- `session.reconnect_count` — how many times did the session reconnect?
+Look at the timeline and identify the spike window. The dashboard shows:
 
-**Find user `jsmith` on host `avd-mid-w10-042`.**
+- **APM errors** — `avd-broker` and `azure-ad-proxy` error rates climbing
+- **Log volume** — application log spike matching the fault injection time
+- **Significant events** — the fault channels appear as annotated events
+  on the timeline
 
-```bash
-cat /root/exxon-eux/data/avd-metrics.json | python3 -c "
-import sys, json
-data = [json.loads(l) for l in sys.stdin if l.strip()]
-user = [d for d in data if d.get('user.name') == 'jsmith']
-for d in user:
-    print(f'  logon_duration: {d.get(\"session.logon_duration_ms\")}ms | app_launch: {d.get(\"session.app_launch_ms\")}ms | reconnects: {d.get(\"session.reconnect_count\")}')
-"
-```
-
-> Note the logon duration and reconnect count — are these normal?
+> **This is the "single pane of glass."** The WAN team's ThousandEyes
+> data, the Security team's AppGate audit, and the Desktop team's AVD
+> session metrics are all on the same time axis.
 
 ---
 
-### Panel B — Windows Event Log (was: Splunk)
+## Step 3 — Ask the AI Agent
 
-Review the forwarded Windows events for `jsmith`'s host:
+Navigate to **AI Agent** (search "Agent Builder") and open the
+**exxon-infrastructure-analyst** agent.
 
-```bash
-cat /root/exxon-eux/data/windows-events.json | python3 -c "
-import sys, json
-data = [json.loads(l) for l in sys.stdin if l.strip()]
-host = [d for d in data if d.get('host.name') == 'avd-mid-w10-042']
-for d in sorted(host, key=lambda x: x.get('@timestamp','')):
-    print(f'  [{d.get(\"@timestamp\",\"\")}] EventID:{d.get(\"winlog.event_id\")} - {d.get(\"message\",\"\")[:80]}')
-"
-```
+Ask the following questions to walk through the root cause investigation:
 
-Look for Event IDs:
-- `4625` — Failed login (wrong credentials or auth failure)
-- `6006` — Event log service stopped (unusual shutdown)
-- `7036` — Service state changed
-- `1074` — System restart initiated
+**Question 1 — Start with the user:**
+> *"What is happening with user jsmith@exxon.com on host avd-mid-w10-042?"*
 
-> What do the event IDs tell you about the state of this machine?
+**Question 2 — Check the network:**
+> *"Is there circuit jitter on the Midland MPLS path and is it causing
+> authentication failures?"*
 
----
+**Question 3 — Check Zero Trust:**
+> *"Is AppGate denying access to audit.exxon.internal for Midland users?
+> What is the deny reason?"*
 
-### Panel C — iboss Connection Log (was: manual Security team query)
+**Question 4 — Identify root cause:**
+> *"Is the Midland AVD issue caused by AWS fallback latency, Jitter DNS,
+> or an AppGate policy block? What is the remediation?"*
 
-```bash
-cat /root/exxon-eux/data/iboss-connections.json | python3 -c "
-import sys, json
-data = [json.loads(l) for l in sys.stdin if l.strip()]
-user = [d for d in data if d.get('user.name') == 'jsmith']
-blocked = [d for d in user if d.get('event.outcome') == 'blocked']
-print(f'Total connections: {len(user)} | Blocked: {len(blocked)}')
-for d in blocked[:5]:
-    print(f'  BLOCKED → {d.get(\"destination.domain\",\"\")} | policy: {d.get(\"iboss.policy.name\",\"\")} | reason: {d.get(\"iboss.block.reason\",\"\")}')
-"
-```
+The agent correlates across SNMP traps, ThousandEyes circuit metrics,
+AppGate audit logs, Windows Event IDs, and AVD session data using
+`user.name` and `network.site` as join keys — in seconds.
 
 ---
 
-### Panel D — AppGate Zero Trust Audit Log
+## Step 4 — The Root Cause
 
-```bash
-cat /root/exxon-eux/data/appgate-audit.json | python3 -c "
-import sys, json
-data = [json.loads(l) for l in sys.stdin if l.strip()]
-user = [d for d in data if d.get('user.name') == 'jsmith']
-for d in user:
-    print(f'  [{d.get(\"event.outcome\")}] Entitlement: {d.get(\"appgate.entitlement.name\")} | Policy: {d.get(\"appgate.policy.name\")} | Reason: {d.get(\"appgate.deny.reason\",\"ALLOW\")}')
-"
+Based on the fault channels and AI Agent investigation, the root cause chain is:
+
+```
+Midland MPLS jitter > 45ms (ThousandEyes TE-MID-001)
+    │
+    ├─► DNS RTT jitter → Azure AD LDAP bind timeout (5000ms)
+    │        → Windows Event ID 4625 (auth failure storm)
+    │        → Account lockout (Event ID 4740) for jsmith
+    │
+    ├─► AppGate device cert expired (avd-mid-w10-042)
+    │        → Audit-System-Access entitlement denied
+    │        → iboss blocks audit.exxon.internal
+    │
+    └─► AVD session storm: 14 users, 47 reconnects in 90s
+             → FSLogix profile mount timeout
+             → Logon duration 38s (SLO: 5s)
 ```
 
-> Is AppGate allowing or denying access? Which entitlement is being denied?
+**Root cause: JITTER_DNS** (Midland MPLS WAN) compounded by
+**APPGATE_POLICY** (expired device certificate)
+
+> **Presenter note:** In the current state, this investigation takes
+> 45–90 minutes of Slack threads across 3 teams with 4 tool logins.
+> With Elastic, the AI Agent answered in one conversation thread —
+> accessible to the NOC, the CISO, and the field engineer's manager
+> without additional tool licenses.
 
 ---
 
-### Panel E — ThousandEyes Circuit Metrics (was: ThousandEyes UI, WAN team only)
+## Step 5 — Validate with ES|QL
 
-```bash
-cat /root/exxon-eux/data/thousandeyes-metrics.json | python3 -c "
-import sys, json
-data = [json.loads(l) for l in sys.stdin if l.strip()]
-midland = [d for d in data if 'midland' in d.get('thousandeyes.agent.name','').lower()]
-for d in midland:
-    print(f'  [{d.get(\"@timestamp\",\"\")}] Agent: {d.get(\"thousandeyes.agent.name\")} | Loss: {d.get(\"thousandeyes.net.loss_pct\")}% | Jitter: {d.get(\"thousandeyes.net.jitter_ms\")}ms | DNS RTT: {d.get(\"thousandeyes.dns.rtt_ms\")}ms')
-"
+In the **Elastic Serverless** tab, navigate to **Discover** and try ES|QL
+to confirm the 5-signal correlation:
+
+```sql
+FROM logs-*, metrics-*
+| WHERE user.name == "jsmith" OR network.site == "Midland-Field-Ops"
+| WHERE @timestamp > NOW() - 30 minutes
+| STATS
+    snmp_events    = COUNT_IF(snmp.trap.type == "linkDown"),
+    auth_failures  = COUNT_IF(winlog.event_id == 4625),
+    appgate_denies = COUNT_IF(appgate.deny.reason IS NOT NULL),
+    avd_reconnects = COUNT_IF(session.reconnect_count > 0)
+| EVAL root_cause = CASE(
+    snmp_events > 0 AND auth_failures > 3, "JITTER_DNS",
+    appgate_denies > 0, "APPGATE_POLICY",
+    "AWS_FALLBACK"
+  )
 ```
 
----
-
-## Step 3 — The Root Cause Investigation
-
-Based on the five panels, answer these questions by examining the data:
-
-### Question 1: Is the issue caused by AWS fallback latency?
-
-Look at the ThousandEyes circuit metrics (Panel E). If Exxon's MPLS circuit
-to Azure is congested, traffic falls back to an AWS transit path, adding
-**50–80ms of additional latency**.
-
-Check: Is packet loss > 5% OR latency > 150ms in the Midland circuit?
-
-```bash
-# Quick check
-python3 /root/exxon-eux/investigate.py --check aws-fallback --user jsmith
-```
-
----
-
-### Question 2: Is this Jitter DNS from the WAN team?
-
-"Jitter DNS" is Exxon's internal term for a known issue where DNS resolution
-jitter from the MPLS WAN causes Azure AD authentication to time out,
-triggering Windows Event ID `4625` (login failure) even though credentials
-are correct.
-
-Check: Is DNS RTT jitter > 20ms AND are there Event ID `4625` events?
-
-```bash
-python3 /root/exxon-eux/investigate.py --check jitter-dns --user jsmith
-```
-
----
-
-### Question 3: Is this an AppGate Zero Trust policy block?
-
-When AppGate denies an entitlement, the client-side application sees a
-connection refused — indistinguishable from a network outage without the
-audit log. Cross-reference the AppGate audit (Panel D) with the iboss
-connection log (Panel C).
-
-Check: Is the audit system (`audit.exxon.internal`) blocked by iboss OR
-denied by AppGate?
-
-```bash
-python3 /root/exxon-eux/investigate.py --check appgate-block --user jsmith
-```
-
----
-
-## Step 4 — Identify the Root Cause
-
-Run the full investigation and identify which of the three root causes
-applies to `jsmith`'s session:
-
-```bash
-python3 /root/exxon-eux/investigate.py --full-report --user jsmith
-```
-
-The investigation script reads all five data files and produces a unified
-timeline showing exactly when each signal changed — similar to what a
-pre-built Elastic Timeline investigation would surface.
-
-**Read the output carefully.** The root cause is one of:
-
-- `AWS_FALLBACK` — Circuit congestion rerouted to AWS transit, adding latency
-- `JITTER_DNS` — DNS resolution jitter from WAN caused auth timeouts
-- `APPGATE_POLICY` — AppGate Zero Trust entitlement was denied by policy update
-
-Record your finding. You will need it for the validation step.
-
----
-
-## Step 5 — Write the ES|QL Correlation Query
-
-Once you know the root cause, write the ES|QL query that would surface this
-issue in a production Elastic Serverless environment. A template is provided:
-
-```bash
-cat /root/exxon-eux/queries/eux-investigation.esql
-```
-
-Review the template and understand how `user.name` and `host.name` serve as
-the correlation keys across all five data streams.
-
----
-
-## Step 6 — Validate
-
-Run the validation script, specifying the root cause you identified:
-
-```bash
-/root/exxon-eux/check-eux-investigation.sh
-```
-
-The script verifies:
-1. All five EUX data files exist and contain data
-2. The investigation script runs successfully for user `jsmith`
-3. A root cause has been identified from the simulated data
-
-Successful output:
-
-```
-✓ AVD session metrics loaded        → N session records for jsmith
-✓ Windows event log loaded          → N events for avd-mid-w10-042
-✓ iboss connection log loaded        → N connections, M blocked
-✓ AppGate Zero Trust audit loaded   → N policy evaluations
-✓ ThousandEyes circuit data loaded  → N Midland circuit samples
-✓ Root cause identified             → [ROOT_CAUSE]
-✓ Challenge 3 complete — single pane of glass for end-user experience
-```
+> **This single query** spans ThousandEyes (SNMP), Windows Event Log,
+> AppGate audit, and AVD metrics — correlating what four separate tools
+> see independently. Exxon has never had this query before.
 
 ---
 
@@ -368,11 +255,11 @@ Successful output:
 
 | Before (4 siloed tools) | After (Elastic Serverless) |
 |---|---|
-| 45–90 min cross-team Slack investigation | 5 min ES|QL timeline investigation |
+| 45–90 min cross-team Slack investigation | 5 min AI Agent conversation |
 | WAN team owns ThousandEyes — app team can't see it | ThousandEyes integrated into shared Kibana |
 | Security team owns AppGate — desktop team can't see it | AppGate + iboss in same index as AVD metrics |
 | Windows events in Splunk — no correlation to circuit data | `user.name` joins all five signal types in ES|QL |
-| Multiple storage costs (Splunk ingest, Datadog hosts, ThousandEyes) | One Elastic Serverless project, one retention policy |
+| Multiple storage costs (Splunk, Datadog, ThousandEyes) | One Elastic Serverless project, one retention policy |
 
 ---
 

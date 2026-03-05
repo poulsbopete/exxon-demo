@@ -85,10 +85,6 @@ notes:
 
     One bill. One query language. Zero custom pipelines.
 tabs:
-- id: qje4n9p40moe
-  title: Terminal
-  type: terminal
-  hostname: es3-api
 - id: 5hcn3kt9phei
   title: Demo App
   type: service
@@ -131,42 +127,43 @@ is split:
 | Container metrics | Datadog Agent (OpenShift) | OTel config is orphaned — "nobody knows what to do" |
 
 The goal: point Exxon's existing OTel instrumentation directly at the
-**Elastic Serverless managed OTLP endpoint** and watch all three signal
-types land in one platform — no collector infrastructure to operate.
+**Elastic Serverless managed OTLP endpoint** — no collector backend to operate.
 
 ---
 
-## Step 1 — Review the Collector Config
+## Step 1 — Review the OTel Collector Architecture
 
 Elastic Serverless provides a **managed OTLP ingest endpoint** — you do not
 deploy or operate any collector backend on Elastic's side. Exxon's Azure API
 services and OpenShift clusters send OTLP directly here.
 
-Review the collector config that would run **close to Exxon's infrastructure**
-(e.g., as a DaemonSet on OpenShift):
-
-```bash
-cat /root/exxon-otel/otel-collector-config.yaml
-```
-
-Notice the exporter section — the **only Elastic-specific configuration** is
-one endpoint URL and one API key header:
+The gateway collector running close to Exxon's infrastructure needs only this:
 
 ```yaml
 exporters:
   otlphttp/elastic:
+    # Elastic Serverless managed ingest endpoint
+    # (.ingest. subdomain — NOT the .es. Elasticsearch endpoint)
     endpoint: "https://<project>.ingest.<region>.aws.elastic.cloud:443"
     headers:
       Authorization: "ApiKey <your-key>"
-```
 
-Everything else (receivers, processors, pipelines) is standard OTel.
-Exxon's orphaned collector configs already have this structure — they just
-need the endpoint URL updated.
+service:
+  pipelines:
+    traces/azure-api:
+      receivers:  [otlp/azure-api]   # Azure API service SDK
+      exporters:  [otlphttp/elastic]
+    metrics/openshift:
+      receivers:  [prometheus/openshift]  # OpenShift pod metrics
+      exporters:  [otlphttp/elastic]
+    logs/network:
+      receivers:  [snmp]             # Cisco switch SNMP traps
+      exporters:  [otlphttp/elastic]
+```
 
 > **Presenter note:** This is the pitch. Exxon's OTel collectors exist
 > today. They're abandoned because nobody knew where to send the data.
-> The answer is: one HTTPS endpoint. Elastic manages the rest.
+> The answer is: **one HTTPS endpoint**. Elastic manages the rest.
 
 ---
 
@@ -175,108 +172,68 @@ need the endpoint URL updated.
 Switch to the **Demo App** tab. You will see:
 
 - **Exxon Infrastructure 2.0** scenario selected (teal highlight)
-- **Kibana URL** pre-populated with your Elastic Serverless project
-- **"Connected! Cluster: ... | OTLP OK"** — both Elasticsearch and the OTLP
-  ingest endpoint are reachable with your API key
-- **"Deploying..."** button — `deploy_all()` is running in the background,
-  creating dashboards, AI agents, alert rules, and the knowledge base
+- **"Connected! Cluster: ... | OTLP OK"** — both Elasticsearch and the managed
+  OTLP ingest endpoint are verified
+- **"Deploying..."** → then transitions to **"Launch"** when complete
 
-> **Presenter note:** Point out "OTLP OK" — this confirms Elastic Serverless's
-> managed OTLP ingest endpoint is live and accepting data. No APM Server
-> to deploy, no collector backend to configure on Elastic's side.
+> **Point out "OTLP OK"** — this confirms Elastic's managed OTLP endpoint
+> is live and accepting data. No APM Server or collector backend needed.
 
-Wait for the "Deploying..." status to clear before moving to Step 3.
-You can also monitor from the Terminal:
-
-```bash
-curl -sf http://localhost:8090/api/setup/progress | python3 -m json.tool
-```
-
-If the scenario isn't running yet, start it:
-
-```bash
-cd /root/exxon-otel && ./generate-telemetry.sh
-```
+Once deployment completes, scroll down in the Demo App to see the
+**Deployment Progress** panel showing all 12 steps with green checkmarks.
 
 ---
 
 ## Step 3 — Explore What Landed in Elastic Serverless
 
-Switch to the **Elastic Serverless** tab. The scenario deployed the following
-assets to your project automatically:
+Switch to the **Elastic Serverless** tab.
 
 ### 3a — Open the Exxon Executive Dashboard
 
-Navigate to **Dashboards** (left nav) → **"Exxon Infrastructure 2.0"**.
+Navigate to **Dashboards** (left nav) → look for **"Exxon Infrastructure 2.0
+Executive Dashboard"**.
 
-This unified dashboard was auto-created and spans all Exxon services — APM
-traces, OpenShift metrics, and application logs in one view.
+This dashboard was auto-created spanning all Exxon services — APM traces,
+OpenShift metrics, and application logs in one view.
 
-> **Presenter note:** This is the "single pane of glass" Exxon asked for.
-> No custom Logstash pipeline. No per-team Datadog dashboard. One Elastic
-> project. One dashboard. All signal types.
+> **This is the "single pane of glass" Exxon asked for.** No custom
+> Logstash pipeline. No per-team Datadog dashboard. One Elastic project,
+> one dashboard, all signal types.
 
 ### 3b — Explore the AI Observability Agent
 
-Navigate to **AI Agent** (or search "Agent Builder" in the left nav). You
-will see the **exxon-infra2-analyst** agent pre-configured with:
+Navigate to **AI Agent** (search "Agent Builder" in the left nav). You will
+see the **exxon-infrastructure-analyst** agent pre-configured with:
 
-- Knowledge of all 12 Exxon fault channels (Datadog pipeline failures,
-  Cisco circuit flapping, AppGate certificate expiry, Jitter DNS, etc.)
+- Knowledge of all 12 Exxon fault channels
 - ES|QL tools to query across APM traces, SNMP logs, and AVD metrics
-- Remediation workflows for each fault type
+- Remediation workflows tied to each fault type
 
-Ask the agent:
+Try asking:
 > *"What fault channels are configured for Exxon's network infrastructure?"*
 
-### 3c — Check Alert Rules
+> *"Which services are affected by the Datadog log pipeline failure?"*
+
+### 3c — Review Alert Rules
 
 Navigate to **Alerts** → **Rules**. You will see **12 alert rules**
-pre-created — one per Exxon fault channel — each monitoring the appropriate
-log streams for Exxon's error signatures.
+pre-created — one per Exxon fault channel — monitoring the appropriate
+log streams with a shared KQL syntax.
 
-> **Presenter note:** In Datadog + Splunk, each of these rules lives in a
-> different system with different syntax. In Elastic Serverless, all 12
-> rules share one query syntax (KQL), one alerting engine, one notification
-> path.
+> **In Datadog + Splunk, each rule lives in a different system with
+> different syntax.** In Elastic Serverless, all 12 rules share one
+> query engine, one alerting engine, one notification path.
 
-### 3d — Query the Knowledge Base
+### 3d — Navigate to Streams
 
-In the Terminal tab, confirm the Exxon knowledge base was indexed:
+Navigate to **Streams** (left nav under Observability). You will see the
+**wired streams** that automatically parse and route OTLP signals:
 
-```bash
-ES_URL=$(agent variable get ES_URL)
-API_KEY=$(agent variable get ES_API_KEY)
-curl -sf -H "Authorization: ApiKey $API_KEY" \
-  "$ES_URL/exxon-knowledge-base/_search?pretty&size=3&q=*" \
-  | python3 -m json.tool | grep '"title"'
-```
+- `logs` — application and SNMP logs
+- `traces-apm-*` — distributed traces from Azure API services
+- `metrics-*` — OpenShift pod and node metrics
 
-You should see 12 documents — one for each Exxon fault channel — ready
-for the AI agent to query during a live incident.
-
----
-
-## Step 4 — Validate: Confirm the Deployment
-
-Run the validation script to confirm the scenario is active and the Elastic
-deployment completed:
-
-```bash
-/root/exxon-otel/check-unified-tags.sh
-```
-
-A successful run prints:
-
-```
-  ✓ Exxon scenario is active
-  ✓ Challenge 1 complete — unified APM and logs with OTel
-```
-
-> **Tip:** Check deployment progress at any time:
-> ```bash
-> curl -sf http://localhost:8090/api/setup/progress | python3 -m json.tool
-> ```
+Click any stream and try **"Query with ES|QL"** to see live data.
 
 ---
 
