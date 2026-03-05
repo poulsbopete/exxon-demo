@@ -170,11 +170,26 @@ body {{ font-family: {theme.font_family}; }}"""
 # ── Environment ──────────────────────────────────────────────────────────────
 
 def _get_default_creds() -> tuple[str, str, str]:
-    """Get (elastic_url, kibana_url, api_key) from first active deployment in store."""
+    """Get (elastic_url, kibana_url, api_key).
+
+    Priority:
+    1. SQLite store (set after a successful /api/setup/launch)
+    2. Environment variables injected by the Instruqt track setup script
+       (DEFAULT_KIBANA_URL / DEFAULT_API_KEY) — available immediately on boot
+       before any launch has been called.
+    """
     recs = store.get_all_active()
     if recs:
         r = recs[0]
         return r["elastic_url"], r["kibana_url"], r["elastic_api_key"]
+
+    # Fall back to env vars written by track setup into the systemd unit
+    kibana = os.getenv("DEFAULT_KIBANA_URL", "").strip().rstrip("/")
+    key = os.getenv("DEFAULT_API_KEY", "").strip()
+    if kibana and key:
+        elastic = kibana.replace(".kb.", ".es.") if ".kb." in kibana else ""
+        return elastic, kibana, key
+
     return "", "", ""
 
 

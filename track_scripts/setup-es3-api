@@ -167,6 +167,8 @@ WorkingDirectory=${DEMO_DIR}
 Environment=PATH=${DEMO_DIR}/packages/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=PYTHONPATH=${DEMO_DIR}/packages
 Environment=ACTIVE_SCENARIO=exxon
+Environment=DEFAULT_KIBANA_URL=${KIBANA_URL}
+Environment=DEFAULT_API_KEY=${ELASTICSEARCH_API_KEY}
 ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${DEMO_PORT}
 Restart=on-failure
 RestartSec=5
