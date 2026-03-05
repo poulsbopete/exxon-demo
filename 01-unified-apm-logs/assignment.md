@@ -174,63 +174,61 @@ You will see output confirming three streams are active:
 
 ---
 
-## Step 3 — Query Unified APM Traces in ES|QL
+## Step 3 — Explore What Was Deployed to Elastic Serverless
 
-Switch to the **Elastic Serverless** tab. In Kibana, go to
-**Discover → Change to ES|QL mode** (or **Dev Tools → Console**, then
-switch to ES|QL).
+Switch to the **Elastic Serverless** tab. The `generate-telemetry.sh`
+script launched the Exxon scenario which deployed the following to your
+Elastic Serverless project:
 
-> **Wait 60–90 seconds** after running `generate-telemetry.sh` for the
-> first documents to arrive. If you get "Unknown column" errors, the
-> index doesn't have data yet — try the warm-up query below first.
+### 3a — Open the Exxon Executive Dashboard
 
-**Warm-up — confirm data is arriving:**
+In Kibana, navigate to **Dashboards** (left nav). Look for the
+**"Exxon Infrastructure 2.0"** dashboard. This unified dashboard was
+created automatically and spans all Exxon services.
 
-```esql
-FROM logs-*,metrics-*,traces-*
-| LIMIT 5
+> **Presenter note:** This is the "single pane of glass" Exxon has asked
+> for. No custom Logstash pipeline. No per-team Datadog dashboard. One
+> Elastic project, one dashboard, all data sources.
+
+### 3b — Explore the AI Observability Agent
+
+In Kibana, navigate to **AI Agent** (or search for "Agent Builder" in the
+left nav). You will see the **exxon-infra2-analyst** agent pre-configured
+with:
+
+- Knowledge of all 12 Exxon fault channels (Datadog pipeline failures,
+  Cisco circuit flapping, AppGate certificate expiry, Jitter DNS, etc.)
+- ES|QL tools to query across APM traces, SNMP logs, and AVD metrics
+- Remediation workflows for each fault type
+
+Ask the agent:
+> *"What fault channels are configured for Exxon's network infrastructure?"*
+
+### 3c — Check Alert Rules
+
+In Kibana, navigate to **Alerts** → **Rules**. You will see **12 alert
+rules** pre-created — one per Exxon fault channel — each monitoring the
+appropriate log streams for Exxon's error signatures.
+
+> **Presenter note:** In Datadog + Splunk, each of these rules lives in a
+> different system with different syntax. In Elastic Serverless, all 12
+> rules share one query syntax (KQL), one alerting engine, and one
+> notification path.
+
+### 3d — Check the Knowledge Base
+
+In the Terminal tab, query the Exxon knowledge base that was indexed:
+
+```bash
+ES_URL=$(agent variable get ES_URL)
+API_KEY=$(agent variable get ES_API_KEY)
+curl -sf -H "Authorization: ApiKey $API_KEY" \
+  "$ES_URL/exxon-knowledge-base/_search?pretty&size=3&q=*" \
+  | python3 -m json.tool | grep '"title"'
 ```
 
-If that returns rows, APM data is flowing. Then run the full query:
-
-```esql
-FROM traces-apm-*
-| STATS
-    total_transactions = COUNT(*),
-    p95_latency_ms     = PERCENTILE(transaction.duration.us, 95) / 1000,
-    error_rate_pct     = ROUND(
-                           100.0 * COUNT_IF(event.outcome == "failure") / COUNT(*),
-                           2
-                         )
-  BY service.name
-| SORT error_rate_pct DESC
-| LIMIT 20
-```
-
-You should see `api-gateway`, `payment-processor`, and `inventory-service`
-alongside their p95 latency and error rates.
-
-> **This is the view Exxon's app teams have never had.** Previously, error
-> rates lived in Datadog; latency percentiles were only visible to whoever
-> had a Datadog APM seat license.
-
----
-
-## Step 4 — Navigate to APM in the Elastic Serverless Tab
-
-In the **Elastic Serverless** tab, click **APM** in the left nav. You will
-see the Exxon services populating the service inventory. Click
-**Service Map** to see the topology of:
-
-- `api-gateway` → `payment-processor` → `inventory-service`
-- All three reporting traces, latency, and error rate in one view
-
-This replaces **three separate Datadog APM dashboards** — one per service
-team — with a single correlated service map.
-
-**Also check:** go to **Discover** and set the index pattern to
-`logs-*` to see application logs flowing from the same services, tagged
-with the same `service.name` — no Splunk required.
+You should see 12 documents — one for each Exxon fault channel — ready
+for the AI agent to query during a live incident.
 
 ---
 
@@ -242,23 +240,20 @@ To complete this challenge, run the validation script:
 /root/exxon-otel/check-unified-tags.sh
 ```
 
-The script verifies the Exxon scenario is running and queries Elastic to
-confirm telemetry is arriving. Data can take **1–3 minutes** to appear
-after `generate-telemetry.sh` runs — if checks fail, wait and retry.
+The script verifies the Exxon scenario is running and that the Elastic
+deployment completed successfully.
 
 A successful validation prints:
 
 ```
   ✓ Exxon scenario is active
-  ✓ traces-apm-*           → N documents
-  ✓ metrics-kubernetes.*   → N documents
-  ✓ logs-apm-*             → N documents
   ✓ Challenge 1 complete — unified APM and logs with OTel
 ```
 
-> **If you see "0 documents":** Data is still in transit. Wait 60 seconds
-> and run `check-unified-tags.sh` again. The scenario sends data
-> continuously so it will arrive.
+> **Tip:** You can also check deploy progress from the Terminal:
+> ```bash
+> curl -sf http://localhost:8090/api/setup/progress | python3 -m json.tool
+> ```
 
 ---
 

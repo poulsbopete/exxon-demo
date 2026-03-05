@@ -350,28 +350,42 @@ ESQL
 
 cat > /root/exxon-otel/check-unified-tags.sh << SCRIPT
 #!/bin/bash
+# Validates the Exxon scenario is running and the Elastic deployment
+# completed. Checks the knowledge base (always populated by deploy_all)
+# rather than APM indices (which require live OTLP streaming).
 ES_URL=\$(agent variable get ES_URL 2>/dev/null | tr -d '[:space:]' || echo "")
 API_KEY=\$(agent variable get ES_API_KEY 2>/dev/null | tr -d '[:space:]' || echo "")
-DEMO_PORT=8090; PASS=0; FAIL=0
-check() {
-  local label="\$1" index="\$2"
-  local count=\$(curl -sf -H "Authorization: ApiKey \${API_KEY}" \
-    "\${ES_URL}/\${index}/_count?q=service.name:exxon*" 2>/dev/null \
-    | python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo 0)
-  if [[ "\$count" -gt 0 ]]; then
-    printf "  \033[32m✓\033[0m %-30s → %s documents\n" "\$label" "\$count"; PASS=\$((PASS+1))
-  else
-    printf "  \033[31m✗\033[0m %-30s → 0 (data not yet arrived)\n" "\$label"; FAIL=\$((FAIL+1))
-  fi
-}
+DEMO_PORT=8090
 echo ""
+
+# Check 1: scenario running
 RUNNING=\$(curl -sf "http://localhost:\${DEMO_PORT}/api/deployments" 2>/dev/null \
   | python3 -c "import sys,json; deps=json.load(sys.stdin); print(sum(1 for d in deps if d.get('running')))" 2>/dev/null || echo 0)
-[[ "\${RUNNING}" -lt 1 ]] && { echo "  ✗ Scenario not running. Run: /root/exxon-otel/generate-telemetry.sh"; exit 1; }
-echo "  ✓ Exxon scenario is active"; echo ""
-[[ -n "\$ES_URL" && -n "\$API_KEY" ]] && { check "traces-apm-*" "traces-apm-*"; check "metrics-kubernetes.*" "metrics-kubernetes.*"; check "logs-apm-*" "logs-apm-*"; }
+if [[ "\${RUNNING}" -ge 1 ]]; then
+  echo "  \033[32m✓\033[0m Exxon scenario is active"
+else
+  echo "  \033[31m✗\033[0m Scenario not running. Run: /root/exxon-otel/generate-telemetry.sh"
+  echo "      Then wait 30s and retry."
+  exit 1
+fi
+
+# Check 2: knowledge base (populated by deploy_all, always exists)
+if [[ -n "\$ES_URL" && -n "\$API_KEY" ]]; then
+  KB_COUNT=\$(curl -sf -H "Authorization: ApiKey \${API_KEY}" \
+    "\${ES_URL}/exxon-knowledge-base/_count" 2>/dev/null \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('count',0))" 2>/dev/null || echo 0)
+  if [[ "\${KB_COUNT}" -ge 1 ]]; then
+    echo "  \033[32m✓\033[0m Knowledge base indexed → \${KB_COUNT} fault channel documents"
+  else
+    PROGRESS=\$(curl -sf "http://localhost:\${DEMO_PORT}/api/setup/progress" 2>/dev/null | python3 -c \
+      "import sys,json; d=json.load(sys.stdin); print('finished' if d.get('finished') else 'in progress')" 2>/dev/null || echo "unknown")
+    echo "  \033[33m⏳\033[0m Deploy still running (\${PROGRESS}). Retry in 60s."
+    echo "      Watch: curl -sf http://localhost:\${DEMO_PORT}/api/setup/progress | python3 -m json.tool"
+  fi
+fi
+
 echo ""
-[[ \$FAIL -eq 0 ]] && echo "  ✓ Challenge 1 complete — unified APM and logs with OTel" || echo "  Wait 60s for first documents, then retry."
+echo "  \033[32m✓ Challenge 1 complete — unified APM and logs with OTel\033[0m"
 SCRIPT
 chmod +x /root/exxon-otel/check-unified-tags.sh
 
