@@ -1004,6 +1004,90 @@ async def stop_and_teardown(body: dict = {}):
         }
 
 
+@app.get("/api/check/{challenge}")
+async def challenge_check(challenge: int):
+    """Server-side check for Instruqt challenge validation.
+
+    Returns JSON {"ok": bool, "reason": str} so check scripts stay simple
+    and never need ES credentials themselves.
+
+    Challenge 1: deployment finished (all setup steps completed).
+    Challenge 2: SNMP trap data present in Elastic (≥3 docs in snmp index).
+    Challenge 3: knowledge base indexed (≥4 docs in kb index).
+    """
+    import httpx as _httpx
+
+    # --- shared: must have a running exxon deployment ---
+    instances = registry.all_instances()
+    inst = None
+    for _, i in instances.items():
+        if "exxon" in (i.ctx.namespace or "").lower() or "exxon" in (i.scenario_id or "").lower():
+            inst = i
+            break
+
+    if not inst:
+        return {"ok": False, "reason": "No Exxon deployment found. Open the Demo App and start the scenario."}
+
+    if challenge == 1:
+        # Must have finished all setup steps
+        prog = _deploy_progress.get(inst.deployment_id, {})
+        finished = prog.get("finished", False)
+        if not finished:
+            steps = prog.get("steps", [])
+            done = sum(1 for s in steps if s.get("status") in ("ok", "skipped", "warn", "warning"))
+            total = len(steps)
+            return {"ok": False, "reason": f"Deployment still in progress ({done}/{total} steps). Wait for all steps to complete."}
+        return {"ok": True, "reason": "Deployment complete."}
+
+    es_url = (inst.ctx.elastic_url or "").rstrip("/")
+    api_key = inst.ctx.elastic_api_key or ""
+    if not es_url or not api_key:
+        elastic_url, _, api_key = _get_default_creds()
+        es_url = (elastic_url or "").rstrip("/")
+
+    if not es_url or not api_key:
+        return {"ok": False, "reason": "No Elastic credentials available yet. Wait for deployment to complete."}
+
+    headers = {"Authorization": f"ApiKey {api_key}", "Content-Type": "application/json"}
+
+    if challenge == 2:
+        # SNMP trap data must be in Elastic (loaded by Challenge 2 setup script)
+        try:
+            with _httpx.Client(timeout=10, verify=True) as http:
+                # Check multiple possible index names (Elastic may route differently)
+                count = 0
+                for idx in ["logs-snmp.trap-exxon", "logs-snmp*", "logs*"]:
+                    resp = http.post(
+                        f"{es_url}/{idx}/_count",
+                        headers=headers,
+                        json={"query": {"exists": {"field": "snmp.trap.type"}}},
+                    )
+                    if resp.status_code < 300:
+                        count = resp.json().get("count", 0)
+                        if count > 0:
+                            break
+                if count >= 3:
+                    return {"ok": True, "reason": f"{count} SNMP trap events found in Elastic."}
+                return {"ok": False, "reason": f"Only {count} SNMP trap events found (need ≥3). The setup script should have loaded them automatically — if this persists, try restarting the challenge."}
+        except Exception as exc:
+            return {"ok": False, "reason": f"Could not query Elastic: {exc}"}
+
+    if challenge == 3:
+        # Knowledge base must be populated
+        try:
+            with _httpx.Client(timeout=10, verify=True) as http:
+                ns = inst.ctx.namespace or "exxon"
+                resp = http.get(f"{es_url}/{ns}-knowledge-base/_count", headers=headers)
+                count = resp.json().get("count", 0) if resp.status_code < 300 else 0
+                if count >= 4:
+                    return {"ok": True, "reason": f"Knowledge base has {count} documents."}
+                return {"ok": False, "reason": f"Knowledge base only has {count} documents (need ≥4). Deployment may not be complete."}
+        except Exception as exc:
+            return {"ok": False, "reason": f"Could not query Elastic: {exc}"}
+
+    return {"ok": False, "reason": f"Unknown challenge number: {challenge}"}
+
+
 @app.get("/api/setup/teardown-progress")
 async def teardown_progress(deployment_id: Optional[str] = None):
     """Return current teardown progress."""

@@ -1,54 +1,16 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Challenge 2 Check — verify SNMP scenario is running and data is loaded.
-# Uses the Demo App API (always reachable at localhost:8090) rather than
-# querying Elastic directly, so it doesn't depend on agent variable names.
-# =============================================================================
-
+# Challenge 2 check — SNMP trap data must be present in Elastic.
 APP="http://localhost:8090"
 
-fail() {
-    echo "FAIL: $*" >&2
-    exit 1
-}
+fail() { echo "FAIL: $*" >&2; exit 1; }
 
-# 1 — Demo App health
-HTTP=$(curl -s -o /dev/null -w "%{http_code}" "${APP}/health" 2>/dev/null || echo 000)
-[[ "${HTTP}" == "200" ]] || fail "Demo App not responding (HTTP ${HTTP}). Is the exxon-demo service running?"
+curl -sf "${APP}/health" >/dev/null 2>&1 \
+    || fail "Demo App not responding."
 
-# 2 — An Exxon deployment exists
-DEPLOYMENTS=$(curl -s "${APP}/api/deployments" 2>/dev/null || echo "{}")
-SCENARIO_ID=$(echo "${DEPLOYMENTS}" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-deps = data if isinstance(data, list) else data.get('deployments', data.get('items', []))
-for d in deps:
-    sid = d.get('scenario_id', d.get('id', ''))
-    if 'exxon' in str(sid).lower():
-        print(sid)
-        break
-" 2>/dev/null || true)
+RESULT=$(curl -sf "${APP}/api/check/2" 2>/dev/null || echo '{"ok":false,"reason":"Could not reach check endpoint"}')
+OK=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('ok',False))" 2>/dev/null || echo "False")
+REASON=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('reason','unknown'))" 2>/dev/null || echo "unknown")
 
-[[ -n "${SCENARIO_ID}" ]] || fail "No Exxon scenario deployment found. Make sure you started the deployment in the Demo App."
-
-# 3 — Deployment is complete (progress = 100% or status = complete/running)
-PROGRESS=$(curl -s "${APP}/api/setup/progress?deployment_id=${SCENARIO_ID}" 2>/dev/null || echo "{}")
-STATUS=$(echo "${PROGRESS}" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-# Accept any non-failed status once majority of steps are done
-steps = data.get('steps', [])
-if not steps:
-    print('unknown')
-    sys.exit(0)
-done = sum(1 for s in steps if s.get('status') in ('ok','skipped','warn','warning'))
-total = len(steps)
-pct = done / total if total else 0
-print('ready' if pct >= 0.6 else 'not_ready')
-" 2>/dev/null || echo "unknown")
-
-[[ "${STATUS}" == "ready" || "${STATUS}" == "unknown" ]] || \
-    fail "Deployment not yet complete — only ${STATUS} of steps finished. Wait for the Deployment Progress to finish."
-
-echo "Challenge 2 validated: Exxon scenario '${SCENARIO_ID}' is deployed and running."
+[[ "$OK" == "True" ]] || fail "$REASON"
+echo "Challenge 2 passed: $REASON"
 exit 0
