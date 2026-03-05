@@ -6,6 +6,7 @@ description: >
   All state transitions are logged for post-mission review.
 
 triggers:
+  - type: alert
   - type: manual
 
 inputs:

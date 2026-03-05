@@ -95,7 +95,9 @@ tabs:
   title: Elastic Serverless
   type: service
   hostname: es3-api
-  path: /app/discover#/?_a=(query:(esql:'FROM logs*\n| WHERE snmp.trap.type IS NOT NULL\n| KEEP @timestamp,device.hostname,network.interface,snmp.trap.type\n| SORT @timestamp DESC\n| LIMIT 20'))
+  path: /app/discover#/?_a=(query:(esql:'FROM logs*\n| WHERE snmp.trap.type IS NOT
+    NULL\n| KEEP @timestamp,device.hostname,network.interface,snmp.trap.type\n| SORT
+    @timestamp DESC\n| LIMIT 20'))
   port: 8080
   custom_request_headers:
   - key: Content-Security-Policy

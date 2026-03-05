@@ -13,9 +13,9 @@ steps:
     type: elasticsearch.esql.query
     with:
       query: >
-        FROM logs.otel,logs.otel.*
+        FROM logs*
         | WHERE @timestamp > NOW() - 15 MINUTES AND severity_text == "ERROR"
-        | STATS total_errors = COUNT(*)
+        | STATS total_errors = COUNT(*), affected_services = VALUES(service.name)
       format: json
 
   - name: run_rca

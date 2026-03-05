@@ -96,6 +96,65 @@ class ServiceManager:
 
     # ── Generators ────────────────────────────────────────────────────
 
+    def _run_fault_log_emitter(self) -> None:
+        """Emit ERROR logs for every active fault channel every 30 seconds.
+
+        Alert rules check body.text / fault.error_type for the channel error_type
+        string.  Without this loop nothing would match those rules when a fault fires.
+        """
+        import random as _random
+        import time as _time
+
+        channel_registry: dict = {}
+        services: dict = {}
+        namespace = "demo"
+        if self._ctx:
+            channel_registry = self._ctx.channel_registry or {}
+            services = self._ctx.services or {}
+            namespace = self._ctx.namespace or "demo"
+
+        # Minimal service config used when the affected service isn't in services dict
+        _fallback_svc_cfg = {
+            "cloud_provider": "azure",
+            "cloud_platform": "azure_vm",
+            "cloud_region": "eastus",
+            "cloud_availability_zone": "eastus-1",
+            "language": "python",
+        }
+
+        while not self._stop_event.is_set():
+            active = self.chaos_controller.get_active_channels() if self.chaos_controller else []
+            for ch_id in active:
+                ch = channel_registry.get(ch_id, {})
+                if not ch:
+                    continue
+                error_type = ch.get("error_type", "unknown")
+                log_messages = ch.get("log_messages", [])
+                affected = ch.get("affected_services", [])
+                service_name = affected[0] if affected else "fault-emitter"
+
+                # Pick one of the channel's real log messages (or fall back to error_type)
+                msg = _random.choice(log_messages) if log_messages else error_type
+
+                svc_cfg = services.get(service_name, _fallback_svc_cfg)
+                resource = self.otlp.build_resource(service_name, svc_cfg, namespace)
+                record = self.otlp.build_log_record(
+                    severity="ERROR",
+                    body=f"[fault-channel-{ch_id}] {error_type}: {msg}",
+                    attributes={
+                        "fault.channel": ch_id,
+                        "fault.error_type": error_type,
+                        "fault.name": ch.get("name", ""),
+                        "service.name": service_name,
+                    },
+                )
+                try:
+                    self.otlp.send_logs(resource, [record])
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("fault-log-emitter: send failed: %s", exc)
+
+            self._stop_event.wait(30)
+
     def _start_generators(self) -> None:
         """Start log/trace/metrics generators as daemon threads."""
         from log_generators.trace_generator import run as run_traces
@@ -151,6 +210,19 @@ class ServiceManager:
             ("gen-jvm-metrics", run_jvm, common_args, common_kwargs),
             ("gen-vpc-flow", run_vpc, common_args, common_kwargs),
         ]
+
+        # Start the fault-log emitter as a separate daemon thread.
+        # This is the bridge between chaos injection and alert rules:
+        # when a channel is active it emits ERROR logs with the channel's
+        # error_type in body.text so the ES-query alert rules can match them.
+        fault_log_thread = threading.Thread(
+            target=self._run_fault_log_emitter,
+            name="gen-fault-logs",
+            daemon=True,
+        )
+        fault_log_thread.start()
+        self._generator_threads.append(fault_log_thread)
+        logger.info("Started generator thread: gen-fault-logs")
         for name, fn, args, kwargs in generators:
             t = threading.Thread(
                 target=fn, args=args, kwargs=kwargs,

@@ -5,6 +5,7 @@ description: >
   remediation command to an ES index for the backend poller to process.
 
 triggers:
+  - type: alert
   - type: manual
 
 inputs:
