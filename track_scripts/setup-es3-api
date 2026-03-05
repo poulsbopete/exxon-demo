@@ -507,15 +507,15 @@ post_trap() {
     -d "\$1" >/dev/null && echo "  [INFO] Sent trap: \$2"
 }
 echo "Sending simulated Cisco SNMP traps..."
-post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"snmp.trap.type\":\"linkDown\",\"device.hostname\":\"cisco-sw-houston-01\",\"device.ip\":\"10.12.5.22\",\"network.interface\":\"GigabitEthernet0/47\",\"snmp.version\":\"v2c\"}" "linkDown cisco-sw-houston-01 → Houston-Refinery-Campus"
+post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"event.type\":\"connection\",\"snmp.trap.type\":\"linkDown\",\"device.hostname\":\"cisco-sw-houston-01\",\"device.ip\":\"10.12.5.22\",\"network.interface\":\"GigabitEthernet0/47\",\"network.site\":\"Houston-Refinery-Campus\",\"snmp.version\":\"v2c\",\"snmp.community\":\"exxon-public\",\"message\":\"linkDown: cisco-sw-houston-01 GigabitEthernet0/47\"}" "linkDown cisco-sw-houston-01 → Houston-Refinery-Campus"
 sleep 1
-post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"snmp.trap.type\":\"linkDown\",\"device.hostname\":\"cisco-sw-midland-03\",\"device.ip\":\"10.14.8.31\",\"network.interface\":\"TenGigabitEthernet1/0/1\",\"snmp.version\":\"v2c\"}" "linkDown cisco-sw-midland-03 → Midland-Field-Ops"
+post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"event.type\":\"connection\",\"snmp.trap.type\":\"linkDown\",\"device.hostname\":\"cisco-sw-midland-03\",\"device.ip\":\"10.14.8.31\",\"network.interface\":\"TenGigabitEthernet1/0/1\",\"network.site\":\"Midland-Field-Ops\",\"snmp.version\":\"v2c\",\"snmp.community\":\"exxon-public\",\"message\":\"linkDown: cisco-sw-midland-03 TenGigabitEthernet1/0/1\"}" "linkDown cisco-sw-midland-03 → Midland-Field-Ops"
 sleep 1
-post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"snmp.trap.type\":\"linkUp\",\"device.hostname\":\"cisco-sw-houston-01\",\"device.ip\":\"10.12.5.22\",\"network.interface\":\"GigabitEthernet0/47\",\"snmp.version\":\"v2c\"}" "linkUp  cisco-sw-houston-01 → (recovered)"
+post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"event.type\":\"connection\",\"snmp.trap.type\":\"linkUp\",\"device.hostname\":\"cisco-sw-houston-01\",\"device.ip\":\"10.12.5.22\",\"network.interface\":\"GigabitEthernet0/47\",\"network.site\":\"Houston-Refinery-Campus\",\"snmp.version\":\"v2c\",\"snmp.community\":\"exxon-public\",\"message\":\"linkUp: cisco-sw-houston-01 GigabitEthernet0/47 (recovered)\"}" "linkUp  cisco-sw-houston-01 → (recovered)"
 sleep 1
-post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"snmp.trap.type\":\"linkDown\",\"device.hostname\":\"cisco-sw-houston-01\",\"device.ip\":\"10.12.5.22\",\"network.interface\":\"GigabitEthernet0/47\",\"snmp.version\":\"v2c\"}" "linkDown cisco-sw-houston-01 → FLAPPING (2nd)"
+post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"event.type\":\"connection\",\"snmp.trap.type\":\"linkDown\",\"device.hostname\":\"cisco-sw-houston-01\",\"device.ip\":\"10.12.5.22\",\"network.interface\":\"GigabitEthernet0/47\",\"network.site\":\"Houston-Refinery-Campus\",\"snmp.version\":\"v2c\",\"snmp.community\":\"exxon-public\",\"message\":\"linkDown: cisco-sw-houston-01 GigabitEthernet0/47 (FLAPPING 2nd)\"}" "linkDown cisco-sw-houston-01 → FLAPPING (2nd)"
 sleep 1
-post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"snmp.trap.type\":\"linkDown\",\"device.hostname\":\"cisco-sw-corpus-02\",\"device.ip\":\"10.19.3.88\",\"network.interface\":\"GigabitEthernet0/23\",\"snmp.version\":\"v2c\"}" "linkDown cisco-sw-corpus-02 → Corpus-Christi-Refinery"
+post_trap "{\"@timestamp\":\"\${NOW}\",\"event.category\":\"network\",\"event.type\":\"connection\",\"snmp.trap.type\":\"linkDown\",\"device.hostname\":\"cisco-sw-corpus-02\",\"device.ip\":\"10.19.3.88\",\"network.interface\":\"GigabitEthernet0/23\",\"network.site\":\"Corpus-Christi-Refinery\",\"snmp.version\":\"v2c\",\"snmp.community\":\"exxon-public\",\"message\":\"linkDown: cisco-sw-corpus-02 GigabitEthernet0/23\"}" "linkDown cisco-sw-corpus-02 → Corpus-Christi-Refinery"
 echo ""
 echo "5 traps sent → Elastic Serverless tab → Logs Explorer → index: logs-snmp.trap-exxon"
 SCRIPT

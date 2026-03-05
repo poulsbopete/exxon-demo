@@ -152,11 +152,11 @@ Switch to the **Elastic Serverless** tab and navigate to **Discover**.
 
 ### 2a — Find the SNMP Trap Events
 
-In the index pattern selector, choose **`logs-snmp.trap-exxon`** (or search
-all logs with `logs*`). Filter for:
+In the data view selector, choose **`Exxon Infrastructure 2.0 Logs`** (pattern: `logs*`).
+Set the time range to **Last 1 hour**. Filter for:
 
 ```
-event.type : "linkDown"
+snmp.trap.type : "linkDown"
 ```
 
 You will see SNMP trap events for multiple Cisco switches across Houston,
