@@ -409,7 +409,7 @@ def _build_dashboard_ndjson(
             pid = f"p_svc_{tile_idx}"
             lid = uid()
             cid = uid()
-            kql = f'resource.attributes.service.name: "{svc_name}" AND status.code: Error'
+            kql = f'service.name: "{svc_name}" AND event.outcome: failure'
             columns = {cid: col_count(label="Errors", kql_filter=kql)}
             layer = make_layer(lid, [cid], columns, DATA_VIEW_ID_TRACES)
             state = make_state(layer, {
@@ -443,10 +443,10 @@ def _build_dashboard_ndjson(
         pid = f"p_k8s_{k8s_tile_idx}"
         lid = uid()
         cid = uid()
-        columns = {cid: col_average("metrics.k8s.node.cpu.utilization", label="CPU %")}
+        columns = {cid: col_average("k8s.node.cpu.utilization", label="CPU %")}
         layer = make_layer(lid, [cid], columns, DATA_VIEW_ID_METRICS)
         cluster_name = group.get("cluster", "")
-        cpu_query = f'resource.attributes.k8s.cluster.name: "{cluster_name}"' if cluster_name else ""
+        cpu_query = f'k8s.cluster.name: "{cluster_name}"' if cluster_name else ""
         state = make_state(layer, {
             "layerId": lid,
             "layerType": "data",
@@ -463,9 +463,9 @@ def _build_dashboard_ndjson(
         pid = f"p_k8s_{k8s_tile_idx}"
         lid = uid()
         cid = uid()
-        columns = {cid: col_average("metrics.k8s.node.memory.utilization", label="Mem %")}
+        columns = {cid: col_average("k8s.node.memory.utilization", label="Mem %")}
         layer = make_layer(lid, [cid], columns, DATA_VIEW_ID_METRICS)
-        mem_query = f'resource.attributes.k8s.cluster.name: "{cluster_name}"' if cluster_name else ""
+        mem_query = f'k8s.cluster.name: "{cluster_name}"' if cluster_name else ""
         state = make_state(layer, {
             "layerId": lid,
             "layerType": "data",
@@ -560,7 +560,7 @@ def _build_dashboard_ndjson(
     columns = {
         cid_x: col_date_histogram("30s"),
         cid_y: col_percentile("duration", 99, "P99 Latency"),
-        cid_split: col_terms("resource.attributes.service.name", "Service", size=9, order_col_id=cid_y),
+        cid_split: col_terms("service.name", "Service", size=9, order_col_id=cid_y),
     }
     layer = make_layer(lid, [cid_x, cid_split, cid_y], columns, DATA_VIEW_ID_TRACES)
     state = make_state(layer, {
@@ -589,7 +589,7 @@ def _build_dashboard_ndjson(
     columns = {
         cid_x: col_date_histogram("30s"),
         cid_y: col_formula("count(kql='status.code: Error') / count()", "Error Rate"),
-        cid_split: col_terms("resource.attributes.service.name", "Service", size=9),
+        cid_split: col_terms("service.name", "Service", size=9),
     }
     layer = make_layer(lid, [cid_x, cid_split, cid_y], columns, DATA_VIEW_ID_TRACES)
     state = make_state(layer, {
@@ -624,7 +624,7 @@ def _build_dashboard_ndjson(
     # p36: CPU Load (1m)
     lid = uid()
     cid = uid()
-    columns = {cid: col_average("metrics.system.cpu.load_average.1m", label="CPU Load")}
+    columns = {cid: col_average("system.cpu.load_average.1m", label="CPU Load")}
     layer = make_layer(lid, [cid], columns, DATA_VIEW_ID_METRICS)
     state = make_state(layer, {
         "layerId": lid,
@@ -640,7 +640,7 @@ def _build_dashboard_ndjson(
     # p37: Disk Utilization
     lid = uid()
     cid = uid()
-    columns = {cid: col_average("metrics.system.filesystem.utilization", label="Disk Util")}
+    columns = {cid: col_average("system.filesystem.utilization", label="Disk Util")}
     layer = make_layer(lid, [cid], columns, DATA_VIEW_ID_METRICS)
     state = make_state(layer, {
         "layerId": lid,
@@ -656,7 +656,7 @@ def _build_dashboard_ndjson(
     # p38: Container Restarts
     lid = uid()
     cid = uid()
-    columns = {cid: col_max("metrics.k8s.container.restarts", label="Restarts")}
+    columns = {cid: col_max("k8s.container.restarts", label="Restarts")}
     layer = make_layer(lid, [cid], columns, DATA_VIEW_ID_METRICS)
     state = make_state(layer, {
         "layerId": lid,
@@ -672,7 +672,7 @@ def _build_dashboard_ndjson(
     # p39: Network Errors
     lid = uid()
     cid = uid()
-    columns = {cid: col_max("metrics.system.network.errors", label="Net Errors")}
+    columns = {cid: col_max("system.network.errors", label="Net Errors")}
     layer = make_layer(lid, [cid], columns, DATA_VIEW_ID_METRICS)
     state = make_state(layer, {
         "layerId": lid,
@@ -692,7 +692,7 @@ def _build_dashboard_ndjson(
     cid_split = uid()
     columns = {
         cid_x: col_date_histogram("30s"),
-        cid_y: col_max("metrics.system.cpu.load_average.1m", label="CPU Load (1m)"),
+        cid_y: col_max("system.cpu.load_average.1m", label="CPU Load (1m)"),
         cid_split: col_terms("host.name", "Host", size=5, order_col_id=cid_y),
     }
     layer = make_layer(lid, [cid_x, cid_split, cid_y], columns, DATA_VIEW_ID_METRICS)
@@ -721,7 +721,7 @@ def _build_dashboard_ndjson(
     cid_split = uid()
     columns = {
         cid_x: col_date_histogram("30s"),
-        cid_y: col_max("metrics.system.filesystem.utilization", label="Disk Utilization"),
+        cid_y: col_max("system.filesystem.utilization", label="Disk Utilization"),
         cid_split: col_terms("host.name", "Host", size=5, order_col_id=cid_y),
     }
     layer = make_layer(lid, [cid_x, cid_split, cid_y], columns, DATA_VIEW_ID_METRICS)
@@ -826,7 +826,7 @@ def _build_dashboard_ndjson(
     columns = {
         cid_x: col_date_histogram("30s"),
         cid_y: col_count(label="Errors"),
-        cid_split: col_terms("resource.attributes.service.name", "Service", size=9, order_col_id=cid_y),
+        cid_split: col_terms("service.name", "Service", size=9, order_col_id=cid_y),
     }
     layer = make_layer(lid, [cid_x, cid_split, cid_y], columns, DATA_VIEW_ID_TRACES)
     state = make_state(layer, {
@@ -944,7 +944,7 @@ def _build_dashboard_ndjson(
     cid_x = uid()
     cid_y = uid()
     columns = {
-        cid_x: col_terms("resource.attributes.service.name", "Service", size=10, order_col_id=cid_y),
+        cid_x: col_terms("service.name", "Service", size=10, order_col_id=cid_y),
         cid_y: col_count(label="Error Count", kql_filter="status.code: Error"),
     }
     layer = make_layer(lid, [cid_x, cid_y], columns, DATA_VIEW_ID_TRACES)
@@ -972,7 +972,7 @@ def _build_dashboard_ndjson(
     cid_val = uid()
     columns = {
         cid_time: col_date_histogram("1m"),
-        cid_svc: col_terms("resource.attributes.service.name", "Service", size=10, order_col_id=cid_val),
+        cid_svc: col_terms("service.name", "Service", size=10, order_col_id=cid_val),
         cid_val: col_count(label="Error Count", kql_filter="status.code: Error"),
     }
     layer = make_layer(lid, [cid_time, cid_svc, cid_val], columns, DATA_VIEW_ID_TRACES)
@@ -997,8 +997,8 @@ def _build_dashboard_ndjson(
     cid_split = uid()
     columns = {
         cid_x: col_date_histogram("30s"),
-        cid_y: col_average("metrics.k8s.node.cpu.utilization", label="CPU Utilization"),
-        cid_split: col_terms("resource.attributes.k8s.cluster.name", "Cluster", size=5, order_col_id=cid_y),
+        cid_y: col_average("k8s.node.cpu.utilization", label="CPU Utilization"),
+        cid_split: col_terms("k8s.cluster.name", "Cluster", size=5, order_col_id=cid_y),
     }
     layer = make_layer(lid, [cid_x, cid_split, cid_y], columns, DATA_VIEW_ID_METRICS)
     state = make_state(layer, {
@@ -1026,8 +1026,8 @@ def _build_dashboard_ndjson(
     cid_split = uid()
     columns = {
         cid_x: col_date_histogram("30s"),
-        cid_y: col_average("metrics.k8s.pod.memory.usage", label="Memory Usage"),
-        cid_split: col_terms("resource.attributes.service.name", "Service", size=10, order_col_id=cid_y),
+        cid_y: col_average("k8s.pod.memory.usage", label="Memory Usage"),
+        cid_split: col_terms("service.name", "Service", size=10, order_col_id=cid_y),
     }
     layer = make_layer(lid, [cid_x, cid_split, cid_y], columns, DATA_VIEW_ID_METRICS)
     state = make_state(layer, {
