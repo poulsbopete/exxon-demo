@@ -206,25 +206,31 @@ done
 # ── Auto-launch the Exxon scenario ────────────────────────────────────────────
 if [[ -n "$KIBANA_URL" && -n "$ELASTICSEARCH_API_KEY" ]]; then
     echo "Auto-launching Exxon Infrastructure 2.0 scenario..."
-    curl -sf -X POST "http://localhost:${DEMO_PORT}/api/setup/launch" \
+
+    # Log the full launch response so failures are visible in instruqt track logs
+    LAUNCH_RESP=$(curl -s -X POST "http://localhost:${DEMO_PORT}/api/setup/launch" \
         -H 'Content-Type: application/json' \
         -d "{
           \"scenario_id\": \"exxon\",
           \"kibana_url\":  \"${KIBANA_URL}\",
           \"api_key\":     \"${ELASTICSEARCH_API_KEY}\"
-        }" >/dev/null 2>&1 \
-        && echo "Exxon scenario launch requested ✓" \
-        || echo "WARN: Auto-launch failed — learners can launch manually via the Demo App tab"
+        }" 2>&1 || true)
+    echo "Launch response: ${LAUNCH_RESP}"
 
-    # Wait for deployment to register
-    for i in $(seq 1 120); do
+    # Short non-blocking wait — give up after 60s and let learners use Demo App
+    echo "Waiting up to 60s for deployment to register..."
+    for i in $(seq 1 30); do
         RUNNING=$(curl -sf "http://localhost:${DEMO_PORT}/api/deployments" 2>/dev/null \
             | python3 -c "import sys,json; deps=json.load(sys.stdin); print(sum(1 for d in deps if d.get('running')))" 2>/dev/null || echo 0)
-        if [[ "$RUNNING" -ge 1 ]]; then
-            echo "Exxon scenario deployment active after ${i}s ✓"
+        if [[ "${RUNNING}" -ge 1 ]]; then
+            echo "Exxon scenario deployment active after $((i * 2))s ✓"
             break
         fi
-        [[ $i -eq 120 ]] && echo "WARN: Deployment did not register after 240s"
+        if [[ $i -eq 30 ]]; then
+            echo "WARN: Deployment not yet active after 60s — proceeding anyway."
+            echo "      Learners can start the scenario manually via the Demo App tab."
+            echo "      Check progress: curl -sf http://localhost:${DEMO_PORT}/api/setup/progress"
+        fi
         sleep 2
     done
 else

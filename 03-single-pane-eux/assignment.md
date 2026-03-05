@@ -24,6 +24,51 @@ notes:
     AVD metrics, Windows events, iboss connection logs, AppGate audit logs,
     and ThousandEyes circuit data — no custom joins required. One ES|QL
     query, five data streams, five minutes to root cause.
+- type: text
+  contents: |
+    **How Elastic ingests the EUX data stack:**
+
+    | Source | Integration | Data Stream |
+    |---|---|---|
+    | Azure Virtual Desktop | Azure Monitor integration | `metrics-azure.compute-*` |
+    | Windows Event Log | Elastic Agent (WinLog) | `logs-windows.forwarded-*` |
+    | iboss Web Gateway | iboss integration / syslog | `logs-iboss.gateway-*` |
+    | AppGate SDP | CEF syslog via Logstash | `logs-appgate.audit-*` |
+    | ThousandEyes | ThousandEyes integration | `metrics-thousandeyes.*` |
+    | Cisco SNMP (WAN) | OTel snmpreceiver | `logs-snmp.trap-*` |
+
+    All six land in one Elastic Serverless project. The unified dashboard
+    queries all six simultaneously using a single time filter.
+- type: text
+  contents: |
+    **The power of OTel for SNMP in the EUX story:**
+
+    ThousandEyes agents run *on Cisco switches*. When Jitter DNS causes
+    a circuit flap, a chain of events fires within milliseconds:
+
+    1. **SNMP trap** (`linkDown`) → OTel Collector → `logs-snmp.trap-*`
+    2. **ThousandEyes** packet loss spike → `metrics-thousandeyes.*`
+    3. **AppGate** device loses connectivity → `logs-appgate.audit-*`
+    4. **AVD session** latency exceeds threshold → `metrics-azure.compute-*`
+    5. **User** calls the help desk
+
+    Elastic's timeline view shows all five events with a **shared
+    timestamp correlation** — the root cause (step 1) is identified
+    before the help desk ticket is even opened.
+- type: text
+  contents: |
+    **"How is the machine functioning for the user?"**
+
+    This is Exxon's core question. Today the answer requires:
+    - Opening ThousandEyes (WAN team login)
+    - Opening AppGate admin console (Security team login)
+    - Opening Azure Portal (Cloud team login)
+    - Waiting for cross-team Slack threads
+
+    With Elastic Serverless, the answer is a **single dashboard** with
+    one time range, one user filter, and one root-cause annotation —
+    accessible to every team, from the NOC to the CISO, without
+    extra tool licenses or per-seat costs.
 tabs:
 - id: yu5uxrvqaktm
   title: Terminal

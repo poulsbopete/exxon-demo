@@ -28,6 +28,60 @@ notes:
     The `service.name` resource attribute from OTel becomes the unifying
     key across APM traces (`traces-apm-*`), infrastructure metrics
     (`metrics-*`), and application logs (`logs-*`).
+- type: text
+  contents: |
+    **Did you know?** The same OTel Collector that routes SNMP traps from
+    Cisco switches can also forward APM traces from Azure API Services.
+
+    A single `receivers → processors → exporters` pipeline in your OTel
+    Collector config handles both worlds:
+
+    ```yaml
+    receivers:
+      snmp:            # ← legacy Cisco infrastructure
+        endpoint: udp://0.0.0.0:162
+      otlp:            # ← modern Azure API services
+        protocols: { http: { endpoint: "0.0.0.0:4318" } }
+    exporters:
+      otlphttp:
+        endpoint: ${ELASTIC_APM_SERVER_URL}
+        headers:
+          Authorization: "ApiKey ${ELASTICSEARCH_API_KEY}"
+    ```
+
+    One collector, one destination, zero extra pipelines.
+- type: text
+  contents: |
+    **Why OTel over vendor agents?**
+
+    | | Datadog Agent | Splunk UF | OTel Collector |
+    |---|---|---|---|
+    | License cost | Per host | Per GB | Free (Apache 2.0) |
+    | Vendor lock-in | High | High | None |
+    | SNMP support | Add-on | No | Native |
+    | OTLP export | No | No | Native |
+    | Runs on OpenShift | Limited | Limited | Yes |
+
+    Exxon's existing OTel configs — currently orphaned — can be **pointed
+    directly at Elastic Serverless** with a single endpoint change.
+- type: text
+  contents: |
+    **Elastic Serverless automatically detects OTel signal types:**
+
+    - **Traces** → APM UI (service maps, latency, error rate, Apdex)
+    - **Metrics** → Metrics Explorer (host CPU, pod memory, custom gauges)
+    - **Logs** → Logs Explorer (structured log fields, full-text search)
+
+    All three land in the same project. An ES|QL query like:
+
+    ```sql
+    FROM logs-*, metrics-*, traces-apm-*
+    | WHERE service.name == "exxon-api-gateway"
+    | STATS avg_latency = AVG(transaction.duration.us)
+    ```
+
+    ...correlates app logs, infra metrics, and APM spans for any Azure
+    API service — in milliseconds, across 1,000+ instances.
 tabs:
 - id: qje4n9p40moe
   title: Terminal

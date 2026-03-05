@@ -23,6 +23,61 @@ notes:
     translates OID values into human-readable field names using bundled MIB
     files. **Runtime fields** and **enrich policies** let you join incoming
     trap data with a ServiceNow CMDB index at query time — no ETL required.
+- type: text
+  contents: |
+    **SNMP via OTel Collector — how it works:**
+
+    Modern OTel Collectors ship a native `snmpreceiver` that polls MIB OIDs
+    and receives v1/v2c/v3 traps, then exports them as **OpenTelemetry
+    metrics and logs** directly to Elastic Serverless:
+
+    ```
+    Cisco Switch (UDP :162)
+         │  SNMP v2c trap
+         ▼
+    OTel Collector (snmpreceiver)
+         │  translate OID → human field
+         ▼
+    Elastic OTLP endpoint
+         │
+         ├─ network.interface.errors   → Metrics Explorer
+         ├─ network.device.status      → Inventory
+         └─ snmp.trap.linkDown         → Logs / Alerts
+    ```
+
+    No OpenNMS required. No separate SNMP proxy. One collector binary.
+- type: text
+  contents: |
+    **SNMP trap → ServiceNow CMDB enrichment in Elastic:**
+
+    When a `linkDown` trap arrives from IP `10.12.5.22`, Elastic's
+    **enrich processor** automatically looks up that IP in a CMDB index
+    (synced from ServiceNow) and stamps the event with:
+
+    - `cmdb.asset_tag`: CHG0043891
+    - `cmdb.location`: Permian Basin — Rack C4
+    - `cmdb.owner_team`: WAN Engineering
+    - `cmdb.ci_class`: Cisco Catalyst 9300
+
+    The NOC sees *which switch, where, owned by whom* — without a
+    separate CMDB lookup ticket.
+- type: text
+  contents: |
+    **OpenNMS vs. Elastic for SNMP: Cost comparison**
+
+    OpenNMS Enterprise requires dedicated polling servers, a PostgreSQL
+    database, and per-device licensing. Elastic Serverless SNMP:
+
+    - **No polling servers** — OTel Collector runs on any Linux host
+    - **No dedicated database** — events land in the same Elasticsearch
+      project as APM, logs, and metrics
+    - **No per-device license** — ingest is priced by data volume, not
+      device count
+    - **Correlation built-in** — network events share the same timeline
+      as the application events they caused
+
+    For Exxon's estate of **hundreds of Cisco devices**, this eliminates
+    an entire tool and its operational overhead.
 tabs:
 - id: 4lxqmpxckh5p
   title: Terminal
