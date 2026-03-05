@@ -148,7 +148,7 @@ class ServiceManager:
                         "severity_text": "ERROR",
                         "message": f"[fault-channel-{ch_id}] {error_type}: {msg}",
                     }
-                    index = f"logs-fault.events-{namespace}"
+                    index = f"fault-events-{namespace}"
                     try:
                         resp = http.post(
                             f"{es_url}/{index}/_doc",

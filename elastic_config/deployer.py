@@ -1359,7 +1359,7 @@ When the user asks you to fix or remediate this issue, use remediation_action to
         a bootstrap document so the stream is created before alert rules reference it.
         """
         import time as _time
-        stream = f"logs-fault.events-{self.ns}"
+        stream = f"fault-events-{self.ns}"
         doc = {
             "@timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S.000Z", _time.gmtime()),
             "fault.error_type": "__bootstrap__",
@@ -1447,7 +1447,7 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                 "query": {
                     "bool": {
                         "filter": [
-                            {"range": {"@timestamp": {"gte": "now-1m"}}},
+                            {"range": {"@timestamp": {"gte": "now-2m"}}},
                             {"term": {"fault.error_type": error_type}},
                         ]
                     }
@@ -1463,12 +1463,12 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                 "params": {
                     "searchType": "esQuery",
                     "esQuery": es_query,
-                    "index": [f"logs-fault.events-{self.ns}"],
+                    "index": [f"fault-events-{self.ns}"],
                     "timeField": "@timestamp",
                     "threshold": [0],
                     "thresholdComparator": ">",
                     "size": 100,
-                    "timeWindowSize": 1,
+                    "timeWindowSize": 2,
                     "timeWindowUnit": "m",
                 },
                 "actions": [{
