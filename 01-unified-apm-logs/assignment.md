@@ -91,6 +91,12 @@ tabs:
   hostname: es3-api
   path: /
   port: 8090
+- id: ch1faultinject
+  title: Fault Injection
+  type: service
+  hostname: es3-api
+  path: /chaos?deployment_id=exxon
+  port: 8090
 - id: tpgjkiktcvye
   title: Elastic Serverless
   type: service

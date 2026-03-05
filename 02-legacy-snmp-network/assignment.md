@@ -85,6 +85,12 @@ tabs:
   hostname: es3-api
   path: /
   port: 8090
+- id: ch2faultinject
+  title: Fault Injection
+  type: service
+  hostname: es3-api
+  path: /chaos?deployment_id=exxon
+  port: 8090
 - id: tpgjkiktcvye
   title: Elastic Serverless
   type: service
@@ -124,11 +130,10 @@ this data and see how Elastic unifies the network and application layers.
 
 ---
 
-## Step 1 — Trigger a Fault in the Demo App
+## Step 1 — Trigger a Fault
 
-Switch to the **Demo App** tab. In the **Fault Injection** panel, you will see
-the 12 Exxon fault channels. Activate **Channel 5 — Cisco Circuit Flap
-(Houston Refinery)**:
+Switch to the **Fault Injection** tab. You will see all 12 Exxon fault
+channels. Activate **Channel 5 — Cisco Circuit Flap (Houston Refinery)**:
 
 1. Click **"Channel 5"** to expand it
 2. Click **"Inject Fault"**

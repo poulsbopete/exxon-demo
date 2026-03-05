@@ -76,6 +76,12 @@ tabs:
   hostname: es3-api
   path: /
   port: 8090
+- id: ch3faultinject
+  title: Fault Injection
+  type: service
+  hostname: es3-api
+  path: /chaos?deployment_id=exxon
+  port: 8090
 - id: ftzxguvojzh3
   title: Elastic Serverless
   type: service
@@ -124,8 +130,8 @@ the AI Agent — in under 5 minutes.
 
 ## Step 1 — Inject the EUX Fault Scenario
 
-Switch to the **Demo App** tab. In the **Fault Injection** panel, activate
-the compounding EUX fault scenario. Inject these channels in sequence:
+Switch to the **Fault Injection** tab and activate the compounding EUX
+fault scenario. Inject these channels in sequence:
 
 1. **Channel 6 — Midland MPLS Circuit Degradation**
    - ThousandEyes agent TE-MID-001 detects jitter > 45ms
