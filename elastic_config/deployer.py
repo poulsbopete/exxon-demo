@@ -1151,36 +1151,74 @@ When the user asks you to fix or remediate this issue, use remediation_action to
         # Clean existing queries (streams already enabled in _configure_platform_settings)
         self._cleanup_significant_events(client)
 
-        # Build bulk operations
-        operations = []
+        # Build query list
+        queries = []
         registry = self.scenario.channel_registry
         for ch_num, ch_data in sorted(registry.items()):
             num_str = f"{int(ch_num):02d}"
             error_type = ch_data["error_type"]
             kql_query = f'body.text: "{error_type}" AND severity_text: "ERROR"'
-            operations.append({
-                "index": {
-                    "id": f"{self.ns}-se-ch{num_str}",
-                    "title": f"Channel {num_str}: {ch_data['name']}",
-                    "kql": {"query": kql_query},
-                }
+            queries.append({
+                "id": f"{self.ns}-se-ch{num_str}",
+                "title": f"Channel {num_str}: {ch_data['name']}",
+                "kql": {"query": kql_query},
             })
 
-        step.items_total = len(operations)
+        step.items_total = len(queries)
 
-        if operations:
+        if not queries:
+            step.status = "ok"
+            step.detail = "No queries to create"
+            notify(self.progress)
+            return
+
+        # Strategy 1: bulk endpoint (fast, but requires the logs stream to exist)
+        operations = [{"index": q} for q in queries]
+        bulk_resp = client.post(
+            f"{self.kibana_url}/api/streams/logs/queries/_bulk",
+            headers=_kibana_headers(self.api_key),
+            json={"operations": operations},
+        )
+        if bulk_resp.status_code < 300:
+            step.items_done = len(queries)
+            step.detail = f"Created {len(queries)} stream queries (bulk)"
+            step.status = "ok"
+            notify(self.progress)
+            return
+
+        logger.warning(
+            "Significant events bulk endpoint returned %s — falling back to individual creates",
+            bulk_resp.status_code,
+        )
+
+        # Strategy 2: individual POSTs (works even if _bulk endpoint is absent)
+        for q in queries:
             resp = client.post(
-                f"{self.kibana_url}/api/streams/logs/queries/_bulk",
+                f"{self.kibana_url}/api/streams/logs/queries",
                 headers=_kibana_headers(self.api_key),
-                json={"operations": operations},
+                json=q,
             )
             if resp.status_code < 300:
-                step.items_done = len(operations)
-                step.detail = f"Created {len(operations)} stream queries"
+                step.items_done += 1
             else:
-                step.detail = f"Bulk create failed (HTTP {resp.status_code})"
+                logger.warning(
+                    "Significant event query %s failed: HTTP %s", q["id"], resp.status_code
+                )
+            notify(self.progress)
 
-        step.status = "ok" if step.items_done > 0 else "failed"
+        if step.items_done > 0:
+            step.detail = f"Created {step.items_done}/{len(queries)} stream queries"
+            step.status = "ok"
+        else:
+            # 404 on both paths means the logs stream doesn't exist yet
+            # (no OTLP data has been ingested). Mark as skipped — the
+            # ScenarioInstance will retry after generators start flowing data.
+            step.detail = (
+                f"Skipped — logs stream not ready yet (HTTP {bulk_resp.status_code}). "
+                "Will retry after telemetry generators start."
+            )
+            step.status = "skipped"
+
         notify(self.progress)
 
     # ── Data Views ─────────────────────────────────────────────────────

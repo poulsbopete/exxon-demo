@@ -86,6 +86,46 @@ class ScenarioInstance:
         logger.info("Instance %s started (%d services)", self.scenario_id,
                      len(self.service_manager.services))
 
+        # Schedule a deferred retry of significant events stream queries.
+        # The Wired Streams `logs` index is created automatically when the
+        # first OTLP log event arrives — which happens only after generators
+        # start. We wait 90 s then attempt to (re)create the queries.
+        if self.ctx.kibana_url and self.ctx.elastic_api_key:
+            t = threading.Thread(
+                target=self._retry_significant_events_after_delay,
+                args=(90,),
+                daemon=True,
+                name=f"sig-events-retry-{self.scenario_id}",
+            )
+            t.start()
+
+    def _retry_significant_events_after_delay(self, delay_s: int) -> None:
+        """Retry significant events creation after generators have had time to flow data."""
+        import time
+        import httpx
+
+        time.sleep(delay_s)
+        if not self._running:
+            return
+
+        try:
+            from elastic_config.deployer import ScenarioDeployer
+            deployer = ScenarioDeployer(
+                self.ctx.scenario,
+                self.ctx.elastic_url or "",
+                self.ctx.kibana_url,
+                self.ctx.elastic_api_key,
+            )
+            with httpx.Client(timeout=30.0, verify=True) as client:
+                deployer._deploy_significant_events(client, lambda _: None)
+            logger.info(
+                "Significant events retry complete for %s", self.scenario_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "Significant events retry failed for %s: %s", self.scenario_id, exc
+            )
+
     def stop(self) -> None:
         """Stop all services and generators."""
         if not self._running:
