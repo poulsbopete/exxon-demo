@@ -407,56 +407,66 @@ async def chaos_trigger(body: dict):
 
 
 def _emit_fault_logs(inst, channel: int, repeat: int = 3, interval: float = 20.0) -> None:
-    """Send ERROR logs for an active fault channel (called in background thread).
+    """Write fault-alert documents directly to Elasticsearch via bulk API.
 
-    Sends `repeat` bursts spaced `interval` seconds apart so the alert rule
-    (1-minute window, 1-minute schedule) has data to match within the first cycle.
+    Bypasses OTLP entirely to avoid field-mapping uncertainty.  Documents land
+    in the 'fault-events-<namespace>' data stream which the alert rules query.
+    Sends `repeat` bursts spaced `interval` seconds apart so the 1-minute alert
+    window always contains data when the rule evaluates.
     """
     import time as _time
     import random as _random
 
     try:
         ctx = getattr(inst, "ctx", None)
-        sm = getattr(inst, "service_manager", None)
-        if not sm or not ctx:
+        if not ctx:
+            logger.warning("_emit_fault_logs: no ctx on instance")
+            return
+
+        es_url = (ctx.elastic_url or "").rstrip("/")
+        api_key = ctx.elastic_api_key or ""
+        if not es_url or not api_key:
+            logger.warning("_emit_fault_logs: missing ES credentials")
             return
 
         channel_registry = ctx.channel_registry or {}
-        services = ctx.services or {}
         namespace = ctx.namespace or "demo"
         ch = channel_registry.get(channel, {})
         if not ch:
+            logger.warning("_emit_fault_logs: channel %d not found in registry", channel)
             return
 
         error_type = ch.get("error_type", "unknown")
         log_messages = ch.get("log_messages", [])
         affected = ch.get("affected_services", [])
         service_name = affected[0] if affected else "fault-emitter"
-
-        _fallback_svc_cfg = {
-            "cloud_provider": "azure",
-            "cloud_platform": "azure_vm",
-            "cloud_region": "eastus",
-            "cloud_availability_zone": "eastus-1",
-            "language": "python",
+        index = f"fault-events-{namespace}"
+        headers = {
+            "Authorization": f"ApiKey {api_key}",
+            "Content-Type": "application/json",
         }
-        svc_cfg = services.get(service_name, _fallback_svc_cfg)
+        url = f"{es_url}/{index}/_doc"
 
-        for _ in range(repeat):
-            msg = _random.choice(log_messages) if log_messages else error_type
-            resource = sm.otlp.build_resource(service_name, svc_cfg, namespace)
-            record = sm.otlp.build_log_record(
-                severity="ERROR",
-                body=f"[fault-channel-{channel}] {error_type}: {msg}",
-                attributes={
+        import httpx as _httpx
+        with _httpx.Client(timeout=10, verify=True) as http:
+            for _ in range(repeat):
+                msg = _random.choice(log_messages) if log_messages else error_type
+                doc = {
+                    "@timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S.000Z", _time.gmtime()),
+                    "error_type": error_type,
                     "fault.channel": channel,
                     "fault.error_type": error_type,
                     "fault.name": ch.get("name", ""),
                     "service.name": service_name,
-                },
-            )
-            sm.otlp.send_logs(resource, [record])
-            _time.sleep(interval)
+                    "severity_text": "ERROR",
+                    "message": f"[fault-channel-{channel}] {error_type}: {msg}",
+                }
+                resp = http.post(url, json=doc, headers=headers)
+                if resp.status_code < 300:
+                    logger.info("fault-event indexed: channel=%d error_type=%s", channel, error_type)
+                else:
+                    logger.warning("fault-event index failed: HTTP %d: %s", resp.status_code, resp.text[:200])
+                _time.sleep(interval)
     except Exception as exc:  # noqa: BLE001
         logger.warning("_emit_fault_logs error: %s", exc)
 

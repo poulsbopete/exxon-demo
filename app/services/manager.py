@@ -97,63 +97,75 @@ class ServiceManager:
     # ── Generators ────────────────────────────────────────────────────
 
     def _run_fault_log_emitter(self) -> None:
-        """Emit ERROR logs for every active fault channel every 30 seconds.
+        """Write fault-alert docs directly to ES every 20 seconds per active channel.
 
-        Alert rules check body.text / fault.error_type for the channel error_type
-        string.  Without this loop nothing would match those rules when a fault fires.
+        Uses the Elasticsearch REST API (not OTLP) so there is no field-mapping
+        uncertainty.  Documents land in 'fault-events-<namespace>' which the
+        alert rules query.
         """
         import random as _random
         import time as _time
+        import httpx as _httpx
 
         channel_registry: dict = {}
-        services: dict = {}
         namespace = "demo"
+        es_url = ""
+        api_key = ""
         if self._ctx:
             channel_registry = self._ctx.channel_registry or {}
-            services = self._ctx.services or {}
             namespace = self._ctx.namespace or "demo"
+            es_url = (getattr(self._ctx, "elastic_url", "") or "").rstrip("/")
+            api_key = getattr(self._ctx, "elastic_api_key", "") or ""
 
-        # Minimal service config used when the affected service isn't in services dict
-        _fallback_svc_cfg = {
-            "cloud_provider": "azure",
-            "cloud_platform": "azure_vm",
-            "cloud_region": "eastus",
-            "cloud_availability_zone": "eastus-1",
-            "language": "python",
+        headers = {
+            "Authorization": f"ApiKey {api_key}",
+            "Content-Type": "application/json",
         }
 
-        while not self._stop_event.is_set():
-            active = self.chaos_controller.get_active_channels() if self.chaos_controller else []
-            for ch_id in active:
-                ch = channel_registry.get(ch_id, {})
-                if not ch:
+        with _httpx.Client(timeout=10, verify=True) as http:
+            while not self._stop_event.is_set():
+                if not es_url or not api_key:
+                    self._stop_event.wait(20)
                     continue
-                error_type = ch.get("error_type", "unknown")
-                log_messages = ch.get("log_messages", [])
-                affected = ch.get("affected_services", [])
-                service_name = affected[0] if affected else "fault-emitter"
 
-                msg = _random.choice(log_messages) if log_messages else error_type
+                active = self.chaos_controller.get_active_channels() if self.chaos_controller else []
+                for ch_id in active:
+                    ch = channel_registry.get(ch_id, {})
+                    if not ch:
+                        continue
+                    error_type = ch.get("error_type", "unknown")
+                    log_messages = ch.get("log_messages", [])
+                    affected = ch.get("affected_services", [])
+                    service_name = affected[0] if affected else "fault-emitter"
+                    msg = _random.choice(log_messages) if log_messages else error_type
 
-                svc_cfg = services.get(service_name, _fallback_svc_cfg)
-                resource = self.otlp.build_resource(service_name, svc_cfg, namespace)
-                record = self.otlp.build_log_record(
-                    severity="ERROR",
-                    body=f"[fault-channel-{ch_id}] {error_type}: {msg}",
-                    attributes={
+                    doc = {
+                        "@timestamp": _time.strftime("%Y-%m-%dT%H:%M:%S.000Z", _time.gmtime()),
                         "fault.channel": ch_id,
                         "fault.error_type": error_type,
                         "fault.name": ch.get("name", ""),
                         "service.name": service_name,
-                    },
-                )
-                try:
-                    self.otlp.send_logs(resource, [record])
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("fault-log-emitter: send failed: %s", exc)
+                        "severity_text": "ERROR",
+                        "message": f"[fault-channel-{ch_id}] {error_type}: {msg}",
+                    }
+                    index = f"fault-events-{namespace}"
+                    try:
+                        resp = http.post(
+                            f"{es_url}/{index}/_doc",
+                            json=doc,
+                            headers=headers,
+                        )
+                        if resp.status_code >= 300:
+                            logger.warning(
+                                "fault-emitter: ES index failed HTTP %d: %s",
+                                resp.status_code, resp.text[:150],
+                            )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("fault-emitter: send error: %s", exc)
 
-            # 20s cadence: within a 1-minute alert window we send 3 logs per channel
-            self._stop_event.wait(20)
+                # 20s cadence → 3 docs/minute per channel, comfortably within
+                # the 1-minute alert window
+                self._stop_event.wait(20)
 
     def _start_generators(self) -> None:
         """Start log/trace/metrics generators as daemon threads."""

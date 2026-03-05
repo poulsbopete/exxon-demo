@@ -1416,13 +1416,8 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                     "bool": {
                         "filter": [
                             {"range": {"@timestamp": {"gte": "now-1m"}}},
-                            {"term": {"severity_text": "ERROR"}},
-                        ],
-                        "should": [
-                            {"match_phrase": {"body.text": error_type}},
                             {"term": {"fault.error_type": error_type}},
-                        ],
-                        "minimum_should_match": 1,
+                        ]
                     }
                 }
             })
@@ -1436,7 +1431,7 @@ When the user asks you to fix or remediate this issue, use remediation_action to
                 "params": {
                     "searchType": "esQuery",
                     "esQuery": es_query,
-                    "index": ["logs*"],
+                    "index": [f"fault-events-{self.ns}"],
                     "timeField": "@timestamp",
                     "threshold": [0],
                     "thresholdComparator": ">",
