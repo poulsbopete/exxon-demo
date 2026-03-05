@@ -1,0 +1,596 @@
+/* NOVA-7 Chaos Controller UI */
+
+:root {
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #111111;
+    --bg-card: #1a1a1a;
+    --border: #2a2a2a;
+    --text-primary: #e0e0e0;
+    --text-secondary: #888888;
+    --text-dim: #555555;
+
+    --nominal: #00ff41;
+    --advisory: #ffd700;
+    --caution: #ff8c00;
+    --critical: #ff0000;
+    --resolve-green: #00cc33;
+    --inject-red: #cc0000;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', 'Space Mono', monospace;
+    min-height: 100vh;
+}
+
+/* ── Header ─────────────────────────────────────────── */
+.chaos-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+}
+
+.header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+}
+
+.header-prefix {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--text-secondary);
+}
+
+.header-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    color: var(--critical);
+    text-shadow: 0 0 10px rgba(255, 0, 0, 0.3);
+}
+
+.header-nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.nav-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 11px;
+    letter-spacing: 2px;
+    border: 1px solid var(--border);
+    padding: 6px 16px;
+    transition: all 0.2s;
+}
+
+.nav-link:hover {
+    border-color: var(--nominal);
+    color: var(--nominal);
+}
+
+/* ── Main Layout ────────────────────────────────────── */
+.main-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    padding: 24px 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* ── Panels ─────────────────────────────────────────── */
+.panel-title {
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.selector-panel,
+.active-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+}
+
+/* ── Channel Dropdown ───────────────────────────────── */
+.channel-dropdown {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 12px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 16px;
+}
+
+.channel-dropdown:focus {
+    outline: none;
+    border-color: var(--nominal);
+}
+
+.channel-dropdown option:disabled {
+    color: #555;
+    font-style: italic;
+}
+
+/* ── Channel Info ───────────────────────────────────── */
+.channel-info {
+    margin-bottom: 20px;
+}
+
+.channel-info.hidden {
+    display: none;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(42, 42, 42, 0.5);
+    font-size: 12px;
+}
+
+.info-label {
+    color: var(--text-secondary);
+    letter-spacing: 2px;
+    font-size: 10px;
+}
+
+.info-value {
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.info-value.code {
+    color: var(--caution);
+    font-size: 11px;
+}
+
+.info-description {
+    margin-top: 12px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+/* ── Mode Selector ──────────────────────────────────── */
+.mode-selector {
+    margin-bottom: 24px;
+}
+
+.mode-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+}
+
+.mode-option:hover {
+    color: var(--text-primary);
+}
+
+.mode-option input[type="radio"] {
+    accent-color: var(--nominal);
+}
+
+/* ── Notification Settings ──────────────────────────── */
+.notification-settings {
+    margin-bottom: 24px;
+}
+
+.notification-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.email-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-secondary);
+}
+
+.email-input {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 10px 14px;
+    border-radius: 4px;
+}
+
+.email-input:focus {
+    outline: none;
+    border-color: var(--nominal);
+}
+
+.email-input::placeholder {
+    color: var(--text-dim);
+}
+
+.toggle-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: color 0.2s;
+}
+
+.toggle-option:hover {
+    color: var(--text-primary);
+}
+
+.toggle-option input[type="checkbox"] {
+    accent-color: var(--nominal);
+}
+
+/* ── Action Buttons ─────────────────────────────────── */
+.action-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.btn-inject,
+.btn-resolve {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    padding: 20px;
+    border: 2px solid;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+}
+
+.btn-inject {
+    background: rgba(204, 0, 0, 0.1);
+    border-color: var(--inject-red);
+    color: var(--critical);
+}
+
+.btn-inject:hover:not(:disabled) {
+    background: rgba(204, 0, 0, 0.3);
+    box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
+}
+
+.btn-inject:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.btn-resolve {
+    background: rgba(0, 204, 51, 0.1);
+    border-color: var(--resolve-green);
+    color: var(--nominal);
+}
+
+.btn-resolve:hover:not(:disabled) {
+    background: rgba(0, 204, 51, 0.3);
+    box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+}
+
+.btn-resolve:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* ── Daily Update Section ───────────────────────────── */
+.daily-update-section {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.btn-daily-update {
+    width: 100%;
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    padding: 16px;
+    border: 2px solid var(--advisory);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+    background: rgba(255, 215, 0, 0.08);
+    color: var(--advisory);
+}
+
+.btn-daily-update:hover:not(:disabled) {
+    background: rgba(255, 215, 0, 0.2);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.2);
+}
+
+.btn-daily-update:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.update-status {
+    margin-top: 8px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    min-height: 18px;
+}
+
+.update-status.success {
+    color: var(--nominal);
+}
+
+.update-status.error {
+    color: var(--critical);
+}
+
+/* ── Active Channels List ───────────────────────────── */
+.active-list {
+    min-height: 200px;
+}
+
+.no-active {
+    color: var(--text-dim);
+    font-size: 12px;
+    text-align: center;
+    padding: 40px 0;
+    letter-spacing: 2px;
+}
+
+.active-channel-card {
+    background: var(--bg-card);
+    border: 1px solid var(--critical);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+    position: relative;
+    animation: card-glow 2s ease-in-out infinite;
+}
+
+.active-channel-card .ac-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.active-channel-card .ac-channel {
+    font-size: 11px;
+    color: var(--critical);
+    letter-spacing: 2px;
+    font-weight: 700;
+}
+
+.active-channel-card .ac-time {
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.active-channel-card .ac-name {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.active-channel-card .ac-subsystem {
+    font-size: 10px;
+    color: var(--text-secondary);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+.active-channel-card .ac-expiry {
+    font-size: 10px;
+    color: var(--warning);
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+
+.active-channel-card .ac-resolve-btn {
+    margin-top: 10px;
+    background: transparent;
+    border: 1px solid var(--resolve-green);
+    color: var(--nominal);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 6px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.active-channel-card .ac-resolve-btn:hover:not(:disabled) {
+    background: rgba(0, 204, 51, 0.2);
+}
+
+.active-channel-card .ac-resolve-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    border-color: var(--text-dim);
+    color: var(--text-dim);
+}
+
+.ac-owner-tag {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--caution);
+    margin-top: 6px;
+    padding: 3px 8px;
+    border: 1px solid rgba(255, 140, 0, 0.3);
+    border-radius: 3px;
+    display: inline-block;
+}
+
+@keyframes card-glow {
+    0%, 100% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.1); }
+    50% { box-shadow: 0 0 20px rgba(255, 0, 0, 0.2); }
+}
+
+/* ── Infrastructure Spikes Panel ────────────────────── */
+.spikes-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 32px;
+    margin: 0 32px 24px;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.spikes-panel.locked,
+.daily-update-section.locked {
+    opacity: 0.4;
+    pointer-events: none;
+    position: relative;
+}
+
+.spikes-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    margin-top: 12px;
+}
+
+.spike-control {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.spike-control.active {
+    border-color: var(--caution);
+    box-shadow: 0 0 15px rgba(255, 140, 0, 0.15);
+}
+
+.spike-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.spike-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-secondary);
+}
+
+.spike-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    transition: color 0.2s;
+}
+
+.spike-value.on {
+    color: var(--caution);
+    text-shadow: 0 0 8px rgba(255, 140, 0, 0.4);
+}
+
+/* Range slider styling */
+.spike-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.spike-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    border: 2px solid var(--bg-card);
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.spike-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+    border: 2px solid var(--bg-card);
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.spike-control.active .spike-slider::-webkit-slider-thumb {
+    background: var(--caution);
+    box-shadow: 0 0 8px rgba(255, 140, 0, 0.5);
+}
+
+.spike-control.active .spike-slider::-moz-range-thumb {
+    background: var(--caution);
+    box-shadow: 0 0 8px rgba(255, 140, 0, 0.5);
+}
+
+.spikes-note {
+    margin-top: 12px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-align: center;
+}
+
+/* ── Responsive ─────────────────────────────────────── */
+@media (max-width: 1200px) {
+    .spikes-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 900px) {
+    .main-layout {
+        grid-template-columns: 1fr;
+    }
+    .spikes-grid {
+        grid-template-columns: 1fr;
+    }
+    .spikes-panel {
+        margin: 0 16px 24px;
+        padding: 16px;
+    }
+}

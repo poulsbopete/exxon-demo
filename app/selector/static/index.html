@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elastic Observability Demo Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #1D1E24;
+            --bg-card: #25262E;
+            --bg-input: #2C2D35;
+            --border: #393A42;
+            --teal: #00BFB3;
+            --teal-dim: #009B90;
+            --text: #E6EDF3;
+            --text-dim: #8B949E;
+            --white: #FFFFFF;
+            --green: #3FB950;
+            --amber: #D29922;
+            --red: #F85149;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', -apple-system, system-ui, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        .header {
+            padding: 40px 40px 0;
+            text-align: center;
+        }
+        .header-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .header-logo svg {
+            width: 32px;
+            height: 32px;
+        }
+        .header-brand {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--teal);
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 8px;
+        }
+        .header p {
+            font-size: 16px;
+            color: var(--text-dim);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Scenario Cards Grid */
+        .scenarios {
+            padding: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .scenarios-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+        }
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .scenario-card {
+            background: var(--bg-card);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        .scenario-card:hover {
+            border-color: var(--teal-dim);
+            transform: translateY(-2px);
+        }
+        .scenario-card.selected {
+            border-color: var(--teal);
+            background: #1a2d2c;
+        }
+        .scenario-card.selected::after {
+            content: '';
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 20px;
+            height: 20px;
+            background: var(--teal);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .scenario-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+        .scenario-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 6px;
+        }
+        .scenario-card p {
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.5;
+        }
+        .scenario-ns {
+            display: inline-block;
+            margin-top: 8px;
+            font-size: 11px;
+            font-family: 'SF Mono', 'Consolas', monospace;
+            color: var(--teal);
+            background: rgba(0, 191, 179, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        /* Connection Panel */
+        .connection {
+            padding: 0 40px 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .connection-panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            display: none;
+        }
+        .connection-panel.visible { display: block; }
+        .connection-panel h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 20px;
+            letter-spacing: 0.5px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-group label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-group input {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            border-color: var(--teal);
+        }
+        .form-group input::placeholder {
+            color: #555;
+        }
+        .btn-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .btn-primary {
+            background: var(--teal);
+            color: #000;
+        }
+        .btn-primary:hover {
+            background: #00d4c7;
+            transform: translateY(-1px);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-secondary {
+            background: var(--bg-input);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover {
+            border-color: var(--teal-dim);
+        }
+        .btn-icon {
+            margin-right: 6px;
+        }
+
+        /* Advanced settings */
+        .advanced-settings {
+            margin-bottom: 24px;
+        }
+        .advanced-settings summary {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 8px 0;
+            user-select: none;
+        }
+        .advanced-settings summary:hover {
+            color: var(--teal);
+        }
+        .advanced-settings .form-group input {
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+        .advanced-settings .form-group input:not(:placeholder-shown) {
+            color: var(--text);
+        }
+
+        /* Active Scenario Banner */
+        .active-banner {
+            display: none;
+            padding: 0 40px;
+            max-width: 1200px;
+            margin: 0 auto 20px;
+        }
+        .active-banner.visible { display: block; }
+        .active-banner-inner {
+            background: linear-gradient(135deg, rgba(0,191,179,0.15) 0%, rgba(0,191,179,0.05) 100%);
+            border: 1px solid rgba(0,191,179,0.3);
+            border-radius: 12px;
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .active-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .active-dot {
+            width: 10px;
+            height: 10px;
+            background: var(--green);
+            border-radius: 50%;
+            animation: pulse 2s ease infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .active-text h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--white);
+        }
+        .active-text p {
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+        .active-links {
+            display: flex;
+            gap: 10px;
+        }
+        .active-links a {
+            padding: 8px 16px;
+            background: rgba(0,191,179,0.2);
+            border: 1px solid rgba(0,191,179,0.3);
+            border-radius: 6px;
+            color: var(--teal);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .active-links a:hover {
+            background: rgba(0,191,179,0.3);
+        }
+        .btn-danger {
+            background: rgba(248,81,73,0.15);
+            border: 1px solid rgba(248,81,73,0.4);
+            color: var(--red);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        .btn-danger:hover {
+            background: rgba(248,81,73,0.3);
+        }
+        .btn-danger:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Status message */
+        .status-msg {
+            font-size: 13px;
+            margin-left: 12px;
+            display: none;
+        }
+        .status-msg.visible { display: inline; }
+        .status-msg.ok { color: var(--green); }
+        .status-msg.err { color: var(--red); }
+        .status-msg.info { color: var(--amber); }
+
+        /* Progress Panel */
+        .progress-panel {
+            padding: 0 40px 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: none;
+        }
+        .progress-panel.visible { display: block; }
+        .progress-inner {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px 32px;
+        }
+        .progress-inner h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 16px;
+        }
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+        .step-icon {
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .step-icon.pending { color: var(--text-dim); }
+        .step-icon.running { color: var(--amber); }
+        .step-icon.ok { color: var(--green); }
+        .step-icon.failed { color: var(--red); }
+        .step-icon.skipped { color: var(--text-dim); }
+        .step-name { color: var(--text); flex: 1; }
+        .step-detail { color: var(--text-dim); font-size: 12px; }
+        .step-count { color: var(--teal); font-size: 12px; font-family: monospace; }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--amber);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+            font-size: 12px;
+        }
+        .footer a {
+            color: var(--teal);
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-logo">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="16" cy="16" r="14" stroke="#00BFB3" stroke-width="2"/>
+                <path d="M10 16h12M16 10v12" stroke="#00BFB3" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <span class="header-brand">Elastic Observability</span>
+        </div>
+        <h1>Demo Platform</h1>
+        <p>Select a scenario, connect your Elastic environment, and launch a fully instrumented observability demo.</p>
+    </div>
+
+    <!-- Active Deployments Banner (populated by JS) -->
+    <div id="deployments-banner" style="padding: 0 40px; max-width: 1200px; margin: 0 auto 20px; display: none;">
+    </div>
+
+    <!-- Scenario Cards -->
+    <div class="scenarios">
+        <div class="scenarios-label">Choose a Scenario</div>
+        <div class="scenario-grid" id="scenario-grid">
+            <!-- Populated by JS -->
+        </div>
+    </div>
+
+    <!-- Connection Panel -->
+    <div class="connection">
+        <div class="connection-panel" id="connection-panel">
+            <h2>Connection Settings</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Kibana URL</label>
+                    <input type="url" id="kibana-url" placeholder="https://my-cluster.kb.us-east-1.aws.elastic.cloud" oninput="deriveUrls()">
+                </div>
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="password" id="api-key" placeholder="Base64-encoded API key">
+                </div>
+            </div>
+            <details class="advanced-settings">
+                <summary>Advanced (auto-derived from Kibana URL)</summary>
+                <div class="form-grid" style="margin-top: 12px;">
+                    <div class="form-group">
+                        <label>Elasticsearch URL</label>
+                        <input type="url" id="es-url" placeholder="Auto-derived from Kibana URL">
+                    </div>
+                    <div class="form-group">
+                        <label>OTLP Endpoint</label>
+                        <input type="url" id="otlp-url" placeholder="Auto-derived from Kibana URL">
+                    </div>
+                </div>
+            </details>
+            <div class="btn-row">
+                <button class="btn btn-secondary" onclick="testConnection()">
+                    <span class="btn-icon">&#9889;</span>Test Connection
+                </button>
+                <button class="btn btn-primary" onclick="launchScenario()" id="launch-btn" disabled>
+                    <span class="btn-icon">&#9654;</span>Launch
+                </button>
+                <span class="status-msg" id="status-msg"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Panel -->
+    <div class="progress-panel" id="progress-panel">
+        <div class="progress-inner">
+            <h2>Deployment Progress</h2>
+            <div id="progress-steps"></div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Powered by <a href="https://elastic.co" target="_blank">Elastic</a> Observability
+    </div>
+
+<script>
+    const SCENARIO_ICONS = {
+        space: '\uD83D\uDE80',
+        fanatics: '\uD83C\uDFC8',
+        financial: '\uD83D\uDCB9',
+        healthcare: '\uD83C\uDFE5',
+        gaming: '\uD83C\uDFAE',
+    };
+
+    let scenarios = [];
+    let selectedScenario = null;
+    let activeDeployments = [];
+
+    async function init() {
+        // Load scenarios
+        try {
+            scenarios = await (await fetch('/api/scenarios')).json();
+        } catch (e) {
+            scenarios = [];
+        }
+
+        // Load active deployments
+        await refreshDeployments();
+
+        renderScenarios();
+    }
+
+    async function refreshDeployments() {
+        try {
+            activeDeployments = await (await fetch('/api/deployments')).json();
+        } catch (e) {
+            activeDeployments = [];
+        }
+        renderDeploymentsBanner();
+        // Update running badges on scenario cards
+        document.querySelectorAll('.scenario-card').forEach(c => {
+            const badge = c.querySelector('.running-badge');
+            const isRunning = activeDeployments.some(d => d.scenario_id === c.dataset.id && d.running);
+            if (badge) badge.style.display = isRunning ? 'inline-block' : 'none';
+        });
+    }
+
+    function renderDeploymentsBanner() {
+        const banner = document.getElementById('deployments-banner');
+        if (!activeDeployments || activeDeployments.length === 0) {
+            banner.style.display = 'none';
+            return;
+        }
+        banner.style.display = 'block';
+        banner.innerHTML = activeDeployments.map(d => `
+            <div style="background: linear-gradient(135deg, rgba(0,191,179,0.15) 0%, rgba(0,191,179,0.05) 100%);
+                        border: 1px solid rgba(0,191,179,0.3); border-radius: 12px; padding: 16px 20px;
+                        display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="font-size: 20px;">${SCENARIO_ICONS[d.scenario_id] || '\uD83D\uDD27'}</span>
+                    <div>
+                        <div style="font-weight: 600; color: #e6edf3; font-size: 14px;">
+                            ${d.scenario_name}
+                            <span style="background: ${d.running ? 'var(--green)' : 'var(--amber)'}; color: #000;
+                                         font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 8px;
+                                         font-weight: 700;">${d.running ? 'RUNNING' : 'STOPPED'}</span>
+                        </div>
+                        <div style="font-size: 12px; color: var(--text-dim);">${d.namespace} &mdash; ${d.deployment_id}</div>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <a href="/home?deployment_id=${d.deployment_id}" style="color: var(--teal); font-size: 13px; text-decoration: none;">Landing</a>
+                    <a href="/dashboard?deployment_id=${d.deployment_id}" style="color: var(--teal); font-size: 13px; text-decoration: none;">Dashboard</a>
+                    <a href="/chaos?deployment_id=${d.deployment_id}" style="color: var(--teal); font-size: 13px; text-decoration: none;">Chaos</a>
+                    <button onclick="stopAndTeardown('${d.deployment_id}')" style="background: var(--red); color: #fff;
+                            border: none; border-radius: 6px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+                            cursor: pointer; font-family: inherit;">Stop &amp; Teardown</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderScenarios() {
+        const grid = document.getElementById('scenario-grid');
+        grid.innerHTML = '';
+        scenarios.forEach(s => {
+            const isRunning = activeDeployments.some(d => d.scenario_id === s.id && d.running);
+            const card = document.createElement('div');
+            card.className = 'scenario-card';
+            card.dataset.id = s.id;
+            card.innerHTML = `
+                <div class="scenario-icon">${SCENARIO_ICONS[s.id] || '\uD83D\uDD27'}</div>
+                <h3>${s.name}</h3>
+                <p>${s.description.substring(0, 120)}${s.description.length > 120 ? '...' : ''}</p>
+                <span class="scenario-ns">${s.namespace}</span>
+                <span class="running-badge" style="display: ${isRunning ? 'inline-block' : 'none'};
+                    position: absolute; top: 10px; right: 10px; background: var(--green); color: #000;
+                    font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: 0.5px;">RUNNING</span>
+            `;
+            card.onclick = () => selectScenario(s.id);
+            grid.appendChild(card);
+        });
+    }
+
+    function selectScenario(id) {
+        selectedScenario = id;
+        document.querySelectorAll('.scenario-card').forEach(c => {
+            c.classList.toggle('selected', c.dataset.id === id);
+        });
+        document.getElementById('connection-panel').classList.add('visible');
+        document.getElementById('launch-btn').disabled = false;
+    }
+
+    function deriveUrls() {
+        const kibanaUrl = document.getElementById('kibana-url').value.trim();
+        const esInput = document.getElementById('es-url');
+        const otlpInput = document.getElementById('otlp-url');
+
+        if (kibanaUrl && kibanaUrl.includes('.kb.')) {
+            if (!esInput.dataset.manual) {
+                esInput.value = kibanaUrl.replace('.kb.', '.es.');
+            }
+            if (!otlpInput.dataset.manual) {
+                let otlp = kibanaUrl.replace('.kb.', '.ingest.').replace(/\/+$/, '');
+                if (!otlp.endsWith(':443')) otlp += ':443';
+                otlpInput.value = otlp;
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        ['es-url', 'otlp-url'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => { el.dataset.manual = '1'; });
+        });
+    });
+
+    async function testConnection() {
+        const kibanaUrl = document.getElementById('kibana-url').value.trim();
+        const key = document.getElementById('api-key').value.trim();
+        const msg = document.getElementById('status-msg');
+
+        if (!kibanaUrl || !key) {
+            msg.textContent = 'Enter Kibana URL and API key';
+            msg.className = 'status-msg visible err';
+            return;
+        }
+
+        msg.textContent = 'Testing...';
+        msg.className = 'status-msg visible info';
+
+        const esUrl = document.getElementById('es-url').value.trim() || undefined;
+        const otlpUrl = document.getElementById('otlp-url').value.trim() || undefined;
+
+        try {
+            const resp = await fetch('/api/setup/test-connection', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    scenario_id: selectedScenario,
+                    kibana_url: kibanaUrl,
+                    api_key: key,
+                    elastic_url: esUrl,
+                    otlp_url: otlpUrl,
+                }),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                let status = 'Connected! Cluster: ' + (data.cluster_name || 'OK');
+                if (data.otlp_ok) status += ' | OTLP OK';
+                else status += ' | OTLP not verified';
+                msg.textContent = status;
+                msg.className = 'status-msg visible ok';
+
+                if (data.elastic_url && !document.getElementById('es-url').dataset.manual) {
+                    document.getElementById('es-url').value = data.elastic_url;
+                }
+                if (data.otlp_endpoint && !document.getElementById('otlp-url').dataset.manual) {
+                    document.getElementById('otlp-url').value = data.otlp_endpoint;
+                }
+            } else {
+                msg.textContent = 'Connection failed: ' + (data.error || 'Unknown error');
+                msg.className = 'status-msg visible err';
+            }
+        } catch (e) {
+            msg.textContent = 'Connection test endpoint not available — you can still launch';
+            msg.className = 'status-msg visible info';
+        }
+    }
+
+    async function launchScenario() {
+        if (!selectedScenario) return;
+
+        const kibanaUrl = document.getElementById('kibana-url').value.trim();
+        const apiKey = document.getElementById('api-key').value.trim();
+        const esUrl = document.getElementById('es-url').value.trim() || undefined;
+        const otlpUrl = document.getElementById('otlp-url').value.trim() || undefined;
+
+        if (!kibanaUrl && !apiKey) {
+            window.location.href = '/home?deployment_id=' + selectedScenario;
+            return;
+        }
+
+        const launchBtn = document.getElementById('launch-btn');
+        launchBtn.disabled = true;
+        launchBtn.textContent = 'Deploying...';
+
+        try {
+            const resp = await fetch('/api/setup/launch', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    scenario_id: selectedScenario,
+                    kibana_url: kibanaUrl,
+                    api_key: apiKey,
+                    elastic_url: esUrl,
+                    otlp_url: otlpUrl,
+                }),
+            });
+            const data = await resp.json();
+            if (data.error) {
+                const msg = document.getElementById('status-msg');
+                msg.textContent = 'Launch failed: ' + data.error;
+                msg.className = 'status-msg visible err';
+                launchBtn.disabled = false;
+                launchBtn.innerHTML = '<span class="btn-icon">&#9654;</span>Launch';
+                return;
+            }
+
+            document.getElementById('progress-panel').classList.add('visible');
+            pollProgress(data.deployment_id || selectedScenario);
+        } catch (e) {
+            const msg = document.getElementById('status-msg');
+            msg.textContent = 'Launch error: ' + e.message;
+            msg.className = 'status-msg visible err';
+            launchBtn.disabled = false;
+            launchBtn.innerHTML = '<span class="btn-icon">&#9654;</span>Launch';
+        }
+    }
+
+    function renderProgress(data) {
+        const container = document.getElementById('progress-steps');
+        if (!data.steps || data.steps.length === 0) {
+            container.innerHTML = '<div class="progress-step"><span class="step-icon running"><span class="spinner"></span></span><span class="step-name">Starting deployment...</span></div>';
+            return;
+        }
+
+        container.innerHTML = data.steps.map(s => {
+            let icon = '';
+            switch (s.status) {
+                case 'ok': icon = '<span class="step-icon ok">&#10003;</span>'; break;
+                case 'failed': icon = '<span class="step-icon failed">&#10007;</span>'; break;
+                case 'running': icon = '<span class="step-icon running"><span class="spinner"></span></span>'; break;
+                case 'skipped': icon = '<span class="step-icon skipped">&#8212;</span>'; break;
+                default: icon = '<span class="step-icon pending">&#9675;</span>';
+            }
+            const count = s.items_total > 0 ? `<span class="step-count">${s.items_done}/${s.items_total}</span>` : '';
+            const detail = s.detail ? `<span class="step-detail">${s.detail}</span>` : '';
+            return `<div class="progress-step">${icon}<span class="step-name">${s.name}</span>${count}${detail}</div>`;
+        }).join('');
+    }
+
+    async function pollProgress(deploymentId) {
+        try {
+            const url = deploymentId ? '/api/setup/progress?deployment_id=' + deploymentId : '/api/setup/progress';
+            const resp = await fetch(url);
+            const data = await resp.json();
+            renderProgress(data);
+
+            if (data.finished) {
+                const launchBtn = document.getElementById('launch-btn');
+                if (data.error) {
+                    launchBtn.textContent = 'Retry';
+                    launchBtn.disabled = false;
+                } else {
+                    launchBtn.innerHTML = '<span class="btn-icon">&#10003;</span>Complete — Go to Dashboard';
+                    launchBtn.disabled = false;
+                    launchBtn.onclick = () => { window.location.href = '/home?deployment_id=' + (deploymentId || selectedScenario); };
+                    refreshDeployments();
+                }
+                return;
+            }
+        } catch (e) {}
+
+        setTimeout(() => pollProgress(deploymentId), 1500);
+    }
+
+    async function stopAndTeardown(deploymentId) {
+        // Find the scenario name for display
+        const dep = activeDeployments.find(d => d.deployment_id === deploymentId);
+        const scenarioName = dep ? dep.scenario_name : deploymentId;
+        if (!confirm('Stop generators and remove artifacts for ' + scenarioName + '?')) return;
+
+        // Disable the teardown button to prevent double-clicks
+        const btns = document.querySelectorAll('button[onclick*="stopAndTeardown"]');
+        btns.forEach(b => { if (b.textContent.includes('Teardown')) b.disabled = true; });
+
+        // Show progress panel with teardown heading
+        const progressPanel = document.getElementById('progress-panel');
+        progressPanel.classList.add('visible');
+        progressPanel.querySelector('h2').textContent = 'Removing ' + scenarioName + '...';
+        document.getElementById('progress-steps').innerHTML =
+            '<div class="progress-step"><span class="step-icon running"><span class="spinner"></span></span><span class="step-name">Starting teardown...</span></div>';
+
+        // Hide connection panel so progress is prominent
+        document.getElementById('connection-panel').classList.remove('visible');
+
+        try {
+            const resp = await fetch('/api/setup/stop-and-teardown', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ deployment_id: deploymentId }),
+            });
+            const data = await resp.json();
+            if (data.status === 'stopping') {
+                pollTeardownProgress(deploymentId, scenarioName);
+            } else if (data.ok) {
+                // Legacy sync response (no credentials case)
+                progressPanel.classList.remove('visible');
+                const msg = document.getElementById('status-msg');
+                msg.textContent = 'Teardown complete for ' + scenarioName;
+                msg.className = 'status-msg visible ok';
+                refreshDeployments();
+            } else {
+                progressPanel.classList.remove('visible');
+                alert('Teardown failed: ' + (data.error || 'Unknown error'));
+            }
+        } catch (e) {
+            progressPanel.classList.remove('visible');
+            alert('Teardown error: ' + e.message);
+        }
+    }
+
+    async function pollTeardownProgress(deploymentId, scenarioName) {
+        try {
+            const resp = await fetch('/api/setup/teardown-progress?deployment_id=' + deploymentId);
+            const data = await resp.json();
+            renderProgress(data);
+
+            if (data.finished) {
+                const progressPanel = document.getElementById('progress-panel');
+                progressPanel.querySelector('h2').textContent = scenarioName + ' removed';
+                refreshDeployments();
+                // Hide progress after a short delay
+                setTimeout(() => {
+                    progressPanel.classList.remove('visible');
+                    progressPanel.querySelector('h2').textContent = 'Deployment Progress';
+                }, 3000);
+                return;
+            }
+        } catch (e) {}
+
+        setTimeout(() => pollTeardownProgress(deploymentId, scenarioName), 1500);
+    }
+
+    init();
+</script>
+</body>
+</html>

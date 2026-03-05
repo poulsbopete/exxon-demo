@@ -5,6 +5,10 @@
 # =============================================================================
 set -euo pipefail
 
+# ── Start the Elastic Launch Demo app (powers the "Elastic" tab on port 80) ──
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+bash "${REPO_ROOT}/setup-app.sh" || true
+
 WORK_DIR="/root/exxon-eux"
 LOG_DIR="/var/log/exxon-demo"
 DASH_PORT=5601

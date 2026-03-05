@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHAOS_TITLE_PLACEHOLDER</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/chaos/static/style.css">
+    <!--THEME_CSS-->
+</head>
+<body>
+    <header class="chaos-header">
+        <div class="header-left">
+            <span class="header-prefix">SCENARIO_NAME_PLACEHOLDER</span>
+            <span class="header-title">CHAOS_TITLE_PLACEHOLDER</span>
+        </div>
+        <div class="header-nav">
+            <a href="javascript:history.back()" class="nav-link">&#8592; BACK</a>
+            <a href="/dashboard" class="nav-link" id="nav-dashboard">DASHBOARD</a>
+        </div>
+    </header>
+
+    <div class="main-layout">
+        <!-- Channel Selector -->
+        <section class="selector-panel">
+            <div class="panel-title">SELECT CHANNEL</div>
+            <select id="channel-select" class="channel-dropdown" onchange="selectChannel(this.value)">
+                <option value="">-- Select Fault Channel --</option>
+            </select>
+
+            <div id="channel-info" class="channel-info hidden">
+                <div class="info-row">
+                    <span class="info-label">CHANNEL</span>
+                    <span class="info-value" id="info-channel"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">NAME</span>
+                    <span class="info-value" id="info-name"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">SUBSYSTEM</span>
+                    <span class="info-value" id="info-subsystem"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">SECTION</span>
+                    <span class="info-value" id="info-section"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">ERROR TYPE</span>
+                    <span class="info-value code" id="info-error-type"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">AFFECTED</span>
+                    <span class="info-value" id="info-affected"></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">STATUS</span>
+                    <span class="info-value" id="info-status">STANDBY</span>
+                </div>
+                <div class="info-description" id="info-description"></div>
+            </div>
+
+            <!-- Fault Mode -->
+            <div class="mode-selector">
+                <div class="panel-title">FAULT MODE</div>
+                <label class="mode-option">
+                    <input type="radio" name="fault-mode" value="calibration" checked>
+                    <span>Calibration Drift</span>
+                </label>
+                <label class="mode-option">
+                    <input type="radio" name="fault-mode" value="cascade">
+                    <span>Cascading Failure</span>
+                </label>
+                <label class="mode-option">
+                    <input type="radio" name="fault-mode" value="intermittent">
+                    <span>Intermittent</span>
+                </label>
+            </div>
+
+            <!-- Notification Settings -->
+            <div class="notification-settings">
+                <div class="panel-title">NOTIFICATION</div>
+                <div class="notification-row">
+                    <label class="email-label" for="user-email">OPERATOR EMAIL</label>
+                    <input type="email" id="user-email" class="email-input" placeholder="operator@example.com">
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="btn-inject" id="btn-inject" onclick="triggerFault()" disabled>
+                    INJECT FAULT
+                </button>
+                <button class="btn-resolve" id="btn-resolve" onclick="resolveFault()" disabled>
+                    RESOLVE
+                </button>
+            </div>
+
+            <!-- Daily Update Report -->
+            <div class="daily-update-section">
+                <div class="panel-title">SYSTEM REPORT</div>
+                <button class="btn-daily-update" id="btn-daily-update" onclick="sendDailyUpdate()">
+                    SEND DAILY UPDATE
+                </button>
+                <div class="update-status" id="update-status"></div>
+            </div>
+        </section>
+
+        <!-- Active Channels Panel -->
+        <section class="active-panel">
+            <div class="panel-title">ACTIVE CHANNELS</div>
+            <div id="active-channels" class="active-list">
+                <div class="no-active">No active faults</div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Infrastructure Spikes Panel -->
+    <section class="spikes-panel">
+        <div class="panel-title">INFRASTRUCTURE SPIKES</div>
+        <div class="spikes-grid">
+            <div class="spike-control">
+                <div class="spike-header">
+                    <span class="spike-label">CPU SPIKE</span>
+                    <span class="spike-value" id="spike-cpu-value">OFF</span>
+                </div>
+                <input type="range" id="spike-cpu" class="spike-slider" min="0" max="100" value="0" step="5">
+            </div>
+            <div class="spike-control">
+                <div class="spike-header">
+                    <span class="spike-label">MEMORY SPIKE</span>
+                    <span class="spike-value" id="spike-memory-value">OFF</span>
+                </div>
+                <input type="range" id="spike-memory" class="spike-slider" min="0" max="100" value="0" step="5">
+            </div>
+            <div class="spike-control">
+                <div class="spike-header">
+                    <span class="spike-label">K8S OOM EVENTS</span>
+                    <span class="spike-value" id="spike-oom-value">OFF</span>
+                </div>
+                <input type="range" id="spike-oom" class="spike-slider" min="0" max="100" value="0" step="5">
+            </div>
+            <div class="spike-control">
+                <div class="spike-header">
+                    <span class="spike-label">LATENCY MULTIPLIER</span>
+                    <span class="spike-value" id="spike-latency-value">1.0x</span>
+                </div>
+                <input type="range" id="spike-latency" class="spike-slider" min="10" max="100" value="10" step="5">
+            </div>
+        </div>
+        <div class="spikes-note">
+            Spikes target infrastructure of active fault channels. With no faults active, all hosts/clusters are affected.
+        </div>
+    </section>
+
+    <script>
+        window.SCENARIO_NAMESPACE = 'NAMESPACE_PLACEHOLDER';
+        window.DEPLOYMENT_ID = 'DEPLOYMENT_ID_PLACEHOLDER';
+        (function() {
+            var did = window.DEPLOYMENT_ID;
+            if (!did) return;
+            var link = document.getElementById('nav-dashboard');
+            if (link) link.href = '/dashboard?deployment_id=' + encodeURIComponent(did);
+        })();
+    </script>
+    <script src="/chaos/static/app.js"></script>
+</body>
+</html>

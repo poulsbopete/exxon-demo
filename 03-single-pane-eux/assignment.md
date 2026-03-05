@@ -39,7 +39,7 @@ tabs:
   type: service
   hostname: shell
   path: /
-  port: 5601
+  port: 80
 difficulty: intermediate
 timelimit: 2700
 enhanced_loading: null

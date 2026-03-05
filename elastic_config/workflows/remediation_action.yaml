@@ -1,0 +1,93 @@
+version: "1"
+name: __SCENARIO_NAME__ Remediation Action
+description: >
+  Execute remediation actions for __SCENARIO_NAME__ anomalies. Queues a
+  remediation command to an ES index for the backend poller to process.
+
+triggers:
+  - type: manual
+
+inputs:
+  - name: error_type
+    type: string
+    required: true
+    description: "Error type to remediate"
+  - name: channel
+    type: number
+    required: true
+    description: "Fault channel being remediated (1-20)"
+  - name: action_type
+    type: string
+    required: true
+    description: "Remediation action to execute (scenario-specific, e.g. restart_mobile_gateway, reset_vpc_peering)"
+  - name: target_service
+    type: string
+    default: ""
+    description: "Service to target for restart/failover actions"
+  - name: justification
+    type: string
+    required: true
+    description: "Reason for executing this remediation"
+  - name: dry_run
+    type: boolean
+    default: false
+
+steps:
+  - name: queue_remediation
+    type: elasticsearch.index
+    with:
+      index: "__NS__-remediation-queue"
+      document:
+        channel: "{{ inputs.channel }}"
+        action_type: "{{ inputs.action_type }}"
+        target_service: "{{ inputs.target_service }}"
+        justification: "{{ inputs.justification }}"
+        dry_run: "{{ inputs.dry_run }}"
+        error_type: "{{ inputs.error_type }}"
+        namespace: "__NS__"
+        status: "pending"
+        mission_id: "__SCENARIO_NAME__"
+      refresh: wait_for
+
+  - name: log_queued
+    type: console
+    with:
+      message: "Remediation QUEUED for channel {{ inputs.channel }}. Backend will process shortly."
+
+  - name: find_open_case
+    type: kibana.request
+    with:
+      method: GET
+      path: "/api/cases/_find?tags=__NS__&tags={{ inputs.error_type }}&status=open&sortField=createdAt&sortOrder=desc&perPage=1&owner=observability"
+
+  - name: close_case
+    type: if
+    condition: "steps.find_open_case.output.cases.0.id : *"
+    steps:
+      - name: update_case_closed
+        type: kibana.updateCase
+        with:
+          cases:
+            - id: "{{ steps.find_open_case.output.cases[0].id }}"
+              version: "{{ steps.find_open_case.output.cases[0].version }}"
+              status: "closed"
+
+  - name: log_case_closed
+    type: console
+    with:
+      message: "Case closed for {{ inputs.error_type }} (channel {{ inputs.channel }})."
+
+  - name: audit_log
+    type: elasticsearch.index
+    with:
+      index: "__NS__-remediation-audit"
+      document:
+        channel: "{{ inputs.channel }}"
+        action_type: "{{ inputs.action_type }}"
+        target_service: "{{ inputs.target_service }}"
+        justification: "{{ inputs.justification }}"
+        dry_run: "{{ inputs.dry_run }}"
+        status: "resolved"
+        case_closed: true
+        mission_id: "__SCENARIO_NAME__"
+      refresh: wait_for

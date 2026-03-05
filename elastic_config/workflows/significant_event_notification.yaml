@@ -1,0 +1,70 @@
+version: "1"
+name: __SCENARIO_NAME__ Significant Event Notification
+description: >
+  Triggered by alert rules when a significant event is detected.
+  Queries recent errors, runs AI root cause analysis, and creates
+  a Kibana case with RCA findings.
+
+triggers:
+  - type: alert
+
+steps:
+  - name: count_errors
+    type: elasticsearch.esql.query
+    with:
+      query: >
+        FROM logs.otel,logs.otel.*
+        | WHERE @timestamp > NOW() - 15 MINUTES AND severity_text == "ERROR"
+        | STATS total_errors = COUNT(*)
+      format: json
+
+  - name: run_rca
+    type: ai.agent
+    agent-id: __AGENT_ID__
+    create-conversation: true
+    with:
+      message: >
+        Significant event detected: {{ event.rule.name }}.
+        Error type: {{ event.rule.tags[1] }}.
+        Total errors in last 15 minutes: {{ steps.count_errors.output.values[0][0] }}.
+        Step 1 — Search logs for this error type, identify affected services,
+        trace the fault propagation, and produce a structured RCA report.
+        Step 2 — Once your RCA is complete, immediately execute the appropriate
+        remediation action using the remediation_action tool. Look up the correct
+        action_type from the knowledge base for this error type and channel, then
+        call remediation_action with that action_type, the affected channel number,
+        and dry_run set to false. Report what remediation was executed and confirm
+        the fault is resolved.
+
+  - name: create_case
+    type: kibana.createCaseDefaultSpace
+    with:
+      title: "__SCENARIO_NAME__ RCA + Remediation: {{ event.rule.name }}"
+      description: |
+       [View Full Conversation]({{ kibanaUrl }}/app/agent_builder/conversations/{{ steps.run_rca.output.conversation_id }})
+
+       {{ steps.run_rca.output.message }}
+      tags:
+        - "__NS__"
+        - "{{ event.rule.tags[1] }}"
+      severity: "high"
+      owner: "observability"
+      settings:
+        syncAlerts: false
+      connector:
+        id: "none"
+        name: "none"
+        type: ".none"
+        fields: null
+
+  - name: audit_log
+    type: elasticsearch.index
+    with:
+      index: "__NS__-significant-events-audit"
+      document:
+        rule_name: "{{ event.rule.name }}"
+        error_type: "{{ event.rule.tags[1] }}"
+        total_errors: "{{ steps.count_errors.output.values[0][0] }}"
+        rca_and_remediation_case_created: true
+        mission_id: "__SCENARIO_NAME__"
+      refresh: wait_for

@@ -1,0 +1,197 @@
+version: "1"
+name: __SCENARIO_NAME__ Escalation and Hold Management
+description: >
+  Manage escalation of critical anomalies and launch hold decisions.
+  Implements the hold protocol: escalate -> hold -> investigate -> resolve -> resume.
+  All state transitions are logged for post-mission review.
+
+triggers:
+  - type: manual
+
+inputs:
+  - name: action
+    type: string
+    required: true
+    description: "Lifecycle action: escalate, request_hold, resolve, request_resume"
+  - name: channel
+    type: number
+    default: 0
+    description: "Fault channel triggering escalation (1-20)"
+  - name: severity
+    type: string
+    default: "WARNING"
+    description: "Escalation severity: ADVISORY, CAUTION, WARNING, CRITICAL"
+  - name: justification
+    type: string
+    required: true
+    description: "Reason for the escalation action"
+  - name: hold_id
+    type: string
+    default: ""
+    description: "Hold identifier for resume and investigation actions"
+  - name: investigation_summary
+    type: string
+    default: ""
+    description: "Summary of investigation findings for resolve action"
+
+steps:
+  - name: route_escalate
+    type: if
+    condition: "inputs.action : escalate"
+    steps:
+      - name: escalate_log
+        type: console
+        with:
+          message: >
+            ESCALATION - __SCENARIO_NAME__ Channel {{ inputs.channel }}.
+            Severity: {{ inputs.severity }}.
+            Requested by operator.
+            Justification: {{ inputs.justification }}.
+            This anomaly requires launch director attention.
+
+      - name: escalate_search
+        type: elasticsearch.search
+        with:
+          index: "logs"
+          size: 2
+          query:
+            bool:
+              filter:
+                - range:
+                    "@timestamp":
+                      gte: "now-5m"
+                - term:
+                    severity_text: "ERROR"
+
+      - name: escalate_context
+        type: console
+        with:
+          message: "Recent errors for context: {{ steps.escalate_search.output.hits.hits | json }}"
+
+      - name: escalate_audit
+        type: elasticsearch.index
+        with:
+          index: "__NS__-escalation-audit"
+          document:
+            action: "escalate"
+            channel: "{{ inputs.channel }}"
+            severity: "{{ inputs.severity }}"
+            justification: "{{ inputs.justification }}"
+            mission_id: "__SCENARIO_NAME__"
+          refresh: wait_for
+
+  - name: route_hold
+    type: if
+    condition: "inputs.action : request_hold"
+    steps:
+      - name: hold_announce
+        type: console
+        with:
+          message: >
+            COUNTDOWN HOLD REQUESTED - Channel {{ inputs.channel }}.
+            Severity: {{ inputs.severity }}.
+            Justification: {{ inputs.justification }}.
+            Clock is stopped pending investigation.
+
+      - name: hold_safety_check
+        type: ai.agent
+        agent-id: __AGENT_ID__
+        with:
+          message: >
+            Countdown hold requested for channel {{ inputs.channel }}
+            (severity: {{ inputs.severity }}). Reason: {{ inputs.justification }}.
+            Perform a rapid safety assessment using your search tools.
+
+      - name: hold_safety_result
+        type: console
+        with:
+          message: "AI Safety Assessment: {{ steps.hold_safety_check.output | json }}"
+
+      - name: hold_audit
+        type: elasticsearch.index
+        with:
+          index: "__NS__-escalation-audit"
+          document:
+            action: "request_hold"
+            channel: "{{ inputs.channel }}"
+            severity: "{{ inputs.severity }}"
+            justification: "{{ inputs.justification }}"
+            status: "hold_active"
+            mission_id: "__SCENARIO_NAME__"
+          refresh: wait_for
+
+  - name: route_resolve
+    type: if
+    condition: "inputs.action : resolve"
+    steps:
+      - name: resolve_announce
+        type: console
+        with:
+          message: >
+            ANOMALY RESOLVED - Hold {{ inputs.hold_id }}.
+            Investigation Summary: {{ inputs.investigation_summary }}.
+            Launch Director may now request countdown resume.
+
+      - name: resolve_audit
+        type: elasticsearch.index
+        with:
+          index: "__NS__-escalation-audit"
+          document:
+            action: "resolve"
+            hold_id: "{{ inputs.hold_id }}"
+            channel: "{{ inputs.channel }}"
+            investigation_summary: "{{ inputs.investigation_summary }}"
+            status: "resolved"
+            mission_id: "__SCENARIO_NAME__"
+          refresh: wait_for
+
+  - name: route_resume
+    type: if
+    condition: "inputs.action : request_resume"
+    steps:
+      - name: resume_safety_check
+        type: elasticsearch.search
+        with:
+          index: "logs"
+          size: 0
+          query:
+            bool:
+              filter:
+                - range:
+                    "@timestamp":
+                      gte: "now-2m"
+                - term:
+                    severity_text: "ERROR"
+
+      - name: resume_evaluate
+        type: if
+        condition: "steps.resume_safety_check.output.hits.total.value : 0"
+        steps:
+          - name: resume_clear
+            type: console
+            with:
+              message: >
+                RESUME APPROVED - Hold {{ inputs.hold_id }}.
+                No active errors detected in last 2 minutes.
+                Countdown clock is restarted. All stations resume nominal operations.
+        else:
+          - name: resume_warning
+            type: console
+            with:
+              message: >
+                RESUME WITH CAUTION - Hold {{ inputs.hold_id }}.
+                {{ steps.resume_safety_check.output.hits.total.value }} errors
+                still active. Launch Director should review before confirming.
+
+      - name: resume_audit
+        type: elasticsearch.index
+        with:
+          index: "__NS__-escalation-audit"
+          document:
+            action: "request_resume"
+            hold_id: "{{ inputs.hold_id }}"
+            justification: "{{ inputs.justification }}"
+            active_errors: "{{ steps.resume_safety_check.output.hits.total.value }}"
+            status: "resume_requested"
+            mission_id: "__SCENARIO_NAME__"
+          refresh: wait_for

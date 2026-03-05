@@ -1,0 +1,76 @@
+version: "1"
+name: __SCENARIO_NAME__ Daily Update Report
+description: >
+  Generate and email a daily system health report using the Observability
+  AI Assistant.  Triggered manually from the chaos controller UI.
+
+triggers:
+  - type: manual
+
+inputs:
+  - name: email
+    type: string
+    required: true
+    description: "Recipient email address for the health report"
+
+steps:
+  - name: count_errors
+    type: elasticsearch.esql.query
+    with:
+      query: >
+        FROM logs,logs.*
+        | WHERE @timestamp >= NOW() - 24 HOURS
+          AND severity_text == "ERROR"
+        | STATS total = COUNT(*)
+      format: json
+
+  - name: count_warnings
+    type: elasticsearch.esql.query
+    with:
+      query: >
+        FROM logs,logs.*
+        | WHERE @timestamp >= NOW() - 24 HOURS
+          AND severity_text == "WARN"
+        | STATS total = COUNT(*)
+      format: json
+
+  - name: generate_report
+    type: ai.agent
+    agent-id: observability.agent
+    with:
+      message: >
+        You are generating a Daily System Health Report for __SCENARIO_NAME__.
+
+        In the last 24 hours the system recorded approximately
+        {{ steps.count_errors.output.values[0][0] }} ERROR-level events and
+        {{ steps.count_warnings.output.values[0][0] }} WARN-level events.
+
+        Please produce a concise health report covering:
+        1. Overall system status (healthy / degraded / critical)
+        2. Most common errors and affected services
+        3. Any anomalous patterns or spikes
+        4. Actionable recommendations
+
+        Use your tools to query recent logs and traces for details.
+        Format the report in clean plain text suitable for email.
+
+  - name: send_email
+    type: email
+    connector-id: Elastic-Cloud-SMTP
+    with:
+      to:
+        - "{{ inputs.email }}"
+      subject: "__SCENARIO_NAME__ — Daily System Health Report"
+      message: "{{ steps.generate_report.output.message }}"
+
+  - name: audit_log
+    type: elasticsearch.index
+    with:
+      index: "__NS__-daily-report-audit"
+      document:
+        recipient: "{{ inputs.email }}"
+        error_count: "{{ steps.count_errors.output.values[0][0] }}"
+        warning_count: "{{ steps.count_warnings.output.values[0][0] }}"
+        status: "sent"
+        mission_id: "__SCENARIO_NAME__"
+      refresh: wait_for
