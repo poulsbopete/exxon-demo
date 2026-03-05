@@ -522,6 +522,31 @@
         await refreshDeployments();
 
         renderScenarios();
+
+        // Pre-populate connection fields from server-written config (Instruqt provisioning)
+        try {
+            const cfg = await (await fetch('/config.json?_=' + Date.now())).json();
+            if (cfg.kibana_url) {
+                const kibanaField = document.getElementById('kibana-url');
+                if (kibanaField && !kibanaField.value) {
+                    kibanaField.value = cfg.kibana_url;
+                    kibanaField.dispatchEvent(new Event('input'));
+                }
+            }
+            if (cfg.api_key) {
+                const keyField = document.getElementById('api-key');
+                if (keyField && !keyField.value) keyField.value = cfg.api_key;
+            }
+            if (cfg.scenario_id) {
+                // Pre-select the matching scenario card
+                setTimeout(() => {
+                    const card = document.querySelector(`.scenario-card[data-id="${cfg.scenario_id}"]`);
+                    if (card) card.click();
+                }, 300);
+            }
+        } catch (e) {
+            // config.json not present (non-Instruqt environment) — ignore silently
+        }
     }
 
     async function refreshDeployments() {
