@@ -234,21 +234,29 @@ mkdir -p /root/exxon-otel/queries
 
 cat > /root/exxon-otel/otel-collector-config.yaml << YAML
 # ============================================================
-# Exxon Infrastructure 2.0 — OTel Collector Configuration
-# Single collector for traces (Azure API), metrics (OpenShift),
-# and logs (Splunk-forward) all destined for Elastic Serverless.
+# Exxon Infrastructure 2.0 — OTel Gateway Collector Config
+#
+# This collector runs CLOSE TO EXXON'S INFRASTRUCTURE
+# (e.g., as a DaemonSet on OpenShift or a VM agent).
+# Elastic Serverless provides the managed OTLP ingest endpoint —
+# no collector backend to deploy or operate on Elastic's side.
+#
+# The ONLY Elastic-specific config: one endpoint URL + one API key.
 # ============================================================
 receivers:
+  # Azure API services push OTLP traces here via SDK instrumentation
   otlp/azure-api:
     protocols:
       http:
         endpoint: "0.0.0.0:4318"
+  # OpenShift/Prometheus metrics scrape (replaces Datadog Agent)
   prometheus/openshift:
     config:
       scrape_configs:
         - job_name: openshift-pods
           static_configs:
             - targets: ["localhost:9090"]
+  # SNMP v2c traps from Cisco switches (replaces OpenNMS)
   snmp:
     endpoint: "udp://0.0.0.0:162"
     version: v2c
@@ -269,7 +277,9 @@ processors:
 
 exporters:
   otlphttp/elastic:
-    # Elastic Serverless OTLP ingest endpoint (.ingest. — NOT .es.)
+    # Elastic Serverless managed OTLP ingest endpoint
+    # (.ingest. subdomain — NOT the .es. Elasticsearch endpoint)
+    # Elastic manages the collector backend — this is the only config needed.
     endpoint: "${OTLP_URL_VAL}"
     headers:
       Authorization: "ApiKey ${API_KEY_VAL}"

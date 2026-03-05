@@ -17,62 +17,65 @@ notes:
     collector configurations that were meant to fix this are orphaned —
     "nobody knows what to do with OpenTelemetry."
 
-    Elastic Serverless accepts the **OpenTelemetry Line Protocol (OTLP)**
-    natively over HTTP with zero pipeline code.
+    Elastic Serverless accepts **OTLP natively** — no APM Server to deploy,
+    no Logstash pipeline to write. Elastic manages the collector backend for you.
 - type: text
   contents: |
-    **Elastic Serverless OTLP Endpoint** accepts logs, metrics, and traces
-    in a single ingest path — no Logstash pipelines, no custom index
-    templates, no per-team Datadog dashboards to maintain.
+    **Elastic Serverless has a managed OTLP ingest endpoint.**
 
-    The `service.name` resource attribute from OTel becomes the unifying
-    key across APM traces (`traces-apm-*`), infrastructure metrics
-    (`metrics-*`), and application logs (`logs-*`).
-- type: text
-  contents: |
-    **Did you know?** The same OTel Collector that routes SNMP traps from
-    Cisco switches can also forward APM traces from Azure API Services.
+    Instead of standing up and operating an OTel Collector backend on your own
+    infrastructure, Elastic Serverless provides a single HTTPS endpoint:
 
-    A single `receivers → processors → exporters` pipeline in your OTel
-    Collector config handles both worlds:
-
-    ```yaml
-    receivers:
-      snmp:            # ← legacy Cisco infrastructure
-        endpoint: udp://0.0.0.0:162
-      otlp:            # ← modern Azure API services
-        protocols: { http: { endpoint: "0.0.0.0:4318" } }
-    exporters:
-      otlphttp:
-        endpoint: ${ELASTIC_APM_SERVER_URL}
-        headers:
-          Authorization: "ApiKey ${ELASTICSEARCH_API_KEY}"
+    ```
+    https://<project>.ingest.<region>.aws.elastic.cloud:443
     ```
 
-    One collector, one destination, zero extra pipelines.
+    Point your existing OTel SDKs, agents, or collectors here. Elastic routes
+    signals automatically:
+
+    - **Traces** → APM (service maps, latency, error rate)
+    - **Metrics** → Metrics Explorer (host CPU, pod memory, custom gauges)
+    - **Logs** → Logs Explorer (structured fields, full-text search)
 - type: text
   contents: |
-    **Why OTel over vendor agents?**
+    **Exxon's orphaned OTel configs — fixed with one line change.**
 
-    | | Datadog Agent | Splunk UF | OTel Collector |
+    The collectors Exxon deployed (and then abandoned) already speak OTLP.
+    The only configuration change needed:
+
+    ```yaml
+    exporters:
+      otlphttp/elastic:
+        # Before: Datadog Agent endpoint or nothing
+        # After:  Elastic Serverless managed ingest endpoint
+        endpoint: "https://<project>.ingest.<region>.aws.elastic.cloud:443"
+        headers:
+          Authorization: "ApiKey <your-api-key>"
+    ```
+
+    No Logstash. No Splunk HEC. No custom index templates.
+    One endpoint, all three signal types.
+- type: text
+  contents: |
+    **Why OTel + Elastic over vendor agents?**
+
+    | | Datadog Agent | Splunk UF | OTel → Elastic Serverless |
     |---|---|---|---|
     | License cost | Per host | Per GB | Free (Apache 2.0) |
     | Vendor lock-in | High | High | None |
     | SNMP support | Add-on | No | Native |
-    | OTLP export | No | No | Native |
+    | Collector backend to operate | Yes | Yes | **No — Elastic manages it** |
     | Runs on OpenShift | Limited | Limited | Yes |
 
-    Exxon's existing OTel configs — currently orphaned — can be **pointed
-    directly at Elastic Serverless** with a single endpoint change.
+    Exxon's existing OTel configs — currently orphaned — can be pointed at
+    Elastic Serverless with **a single endpoint URL change**.
 - type: text
   contents: |
-    **Elastic Serverless automatically detects OTel signal types:**
+    **Elastic Serverless automatically detects OTel signal types.**
 
-    - **Traces** → APM UI (service maps, latency, error rate, Apdex)
-    - **Metrics** → Metrics Explorer (host CPU, pod memory, custom gauges)
-    - **Logs** → Logs Explorer (structured log fields, full-text search)
-
-    All three land in the same project. An ES|QL query like:
+    All three signal types land in the same project under consistent
+    field names. Correlate app logs, infra metrics, and APM spans for any
+    Azure API service with one ES|QL query:
 
     ```sql
     FROM logs-*, metrics-*, traces-apm-*
@@ -80,8 +83,7 @@ notes:
     | STATS avg_latency = AVG(transaction.duration.us)
     ```
 
-    ...correlates app logs, infra metrics, and APM spans for any Azure
-    API service — in milliseconds, across 1,000+ instances.
+    One bill. One query language. Zero custom pipelines.
 tabs:
 - id: qje4n9p40moe
   title: Terminal
@@ -128,73 +130,94 @@ is split:
 | Application logs | Splunk | No shared service identity with traces |
 | Container metrics | Datadog Agent (OpenShift) | OTel config is orphaned — "nobody knows what to do" |
 
-The goal: point **one** OpenTelemetry collector at Elastic Serverless and
-watch all three signal types land in a single, queryable platform.
+The goal: point Exxon's existing OTel instrumentation directly at the
+**Elastic Serverless managed OTLP endpoint** and watch all three signal
+types land in one platform — no collector infrastructure to operate.
 
 ---
 
-## Step 1 — Explore the Mock Environment
+## Step 1 — Review the Collector Config
 
-A local **mock OTel collector** and **mock Elastic endpoint** have been
-pre-configured in `/root/exxon-otel/`. Review the collector configuration:
+Elastic Serverless provides a **managed OTLP ingest endpoint** — you do not
+deploy or operate any collector backend on Elastic's side. Exxon's Azure API
+services and OpenShift clusters send OTLP directly here.
+
+Review the collector config that would run **close to Exxon's infrastructure**
+(e.g., as a DaemonSet on OpenShift):
 
 ```bash
 cat /root/exxon-otel/otel-collector-config.yaml
 ```
 
-Notice the three pipelines:
-- `traces/azure-api` — simulated Datadog-style APM traces from Azure API services
-- `metrics/openshift` — Prometheus scrape from simulated OpenShift pods
-- `logs/splunk-forward` — Splunk-style forwarded application logs reformatted as OTLP
+Notice the exporter section — the **only Elastic-specific configuration** is
+one endpoint URL and one API key header:
 
-All three pipelines share one exporter: `otlphttp/elastic` pointing at the
-local mock Elastic Serverless OTLP endpoint on `http://localhost:8200`.
+```yaml
+exporters:
+  otlphttp/elastic:
+    endpoint: "https://<project>.ingest.<region>.aws.elastic.cloud:443"
+    headers:
+      Authorization: "ApiKey <your-key>"
+```
+
+Everything else (receivers, processors, pipelines) is standard OTel.
+Exxon's orphaned collector configs already have this structure — they just
+need the endpoint URL updated.
+
+> **Presenter note:** This is the pitch. Exxon's OTel collectors exist
+> today. They're abandoned because nobody knew where to send the data.
+> The answer is: one HTTPS endpoint. Elastic manages the rest.
 
 ---
 
-## Step 2 — Start the Simulated Data Flow
+## Step 2 — Activate the Telemetry Flow
 
-Run the setup script to start the mock collector and begin sending data:
+The demo app sends OTLP traces, metrics, and logs directly to your Elastic
+Serverless project. Start the flow:
 
 ```bash
 cd /root/exxon-otel
 ./generate-telemetry.sh
 ```
 
-You will see output confirming three streams are active:
+You will see output confirming all three streams are active and going to
+**Elastic Serverless** — not a local process, not a mock endpoint:
 
 ```
-[INFO] Sending traces  → http://localhost:8200/...  (service: exxon-azure-api-gateway)
-[INFO] Sending metrics → http://localhost:8200/...  (k8s.cluster.name: openshift-prod)
-[INFO] Sending logs    → http://localhost:8200/...  (service: payment-processor-v2)
+[telemetry] Exxon scenario already active ✓
+[telemetry] Telemetry streams now active:
+[telemetry]   [INFO] Sending traces  → Elastic APM  (service: exxon-azure-api-gateway)
+[telemetry]   [INFO] Sending traces  → Elastic APM  (service: payment-processor-v2)
+[telemetry]   [INFO] Sending metrics → Elastic Metrics (k8s.cluster.name: openshift-prod)
+[telemetry]   [INFO] Sending logs    → Elastic Logs   (service: inventory-service-v3)
 ```
 
-> **Presenter note:** This replaces the broken Datadog log pipeline. Same
-> OTel collector config — different exporter URL. No Logstash. No Splunk HEC.
+> **Presenter note:** This replaces the broken Datadog log pipeline and
+> the disconnected Splunk forwarder. Same OTel instrumentation — new
+> destination. No Logstash. No Splunk HEC. No custom index templates.
 
 ---
 
-## Step 3 — Explore What Was Deployed to Elastic Serverless
+## Step 3 — Explore What Landed in Elastic Serverless
 
-Switch to the **Elastic Serverless** tab. The `generate-telemetry.sh`
-script launched the Exxon scenario which deployed the following to your
-Elastic Serverless project:
+Switch to the **Elastic Serverless** tab. The scenario deployed the following
+assets to your project automatically:
 
 ### 3a — Open the Exxon Executive Dashboard
 
-In Kibana, navigate to **Dashboards** (left nav). Look for the
-**"Exxon Infrastructure 2.0"** dashboard. This unified dashboard was
-created automatically and spans all Exxon services.
+Navigate to **Dashboards** (left nav) → **"Exxon Infrastructure 2.0"**.
 
-> **Presenter note:** This is the "single pane of glass" Exxon has asked
-> for. No custom Logstash pipeline. No per-team Datadog dashboard. One
-> Elastic project, one dashboard, all data sources.
+This unified dashboard was auto-created and spans all Exxon services — APM
+traces, OpenShift metrics, and application logs in one view.
+
+> **Presenter note:** This is the "single pane of glass" Exxon asked for.
+> No custom Logstash pipeline. No per-team Datadog dashboard. One Elastic
+> project. One dashboard. All signal types.
 
 ### 3b — Explore the AI Observability Agent
 
-In Kibana, navigate to **AI Agent** (or search for "Agent Builder" in the
-left nav). You will see the **exxon-infra2-analyst** agent pre-configured
-with:
+Navigate to **AI Agent** (or search "Agent Builder" in the left nav). You
+will see the **exxon-infra2-analyst** agent pre-configured with:
 
 - Knowledge of all 12 Exxon fault channels (Datadog pipeline failures,
   Cisco circuit flapping, AppGate certificate expiry, Jitter DNS, etc.)
@@ -206,18 +229,18 @@ Ask the agent:
 
 ### 3c — Check Alert Rules
 
-In Kibana, navigate to **Alerts** → **Rules**. You will see **12 alert
-rules** pre-created — one per Exxon fault channel — each monitoring the
-appropriate log streams for Exxon's error signatures.
+Navigate to **Alerts** → **Rules**. You will see **12 alert rules**
+pre-created — one per Exxon fault channel — each monitoring the appropriate
+log streams for Exxon's error signatures.
 
 > **Presenter note:** In Datadog + Splunk, each of these rules lives in a
 > different system with different syntax. In Elastic Serverless, all 12
-> rules share one query syntax (KQL), one alerting engine, and one
-> notification path.
+> rules share one query syntax (KQL), one alerting engine, one notification
+> path.
 
-### 3d — Check the Knowledge Base
+### 3d — Query the Knowledge Base
 
-In the Terminal tab, query the Exxon knowledge base that was indexed:
+In the Terminal tab, confirm the Exxon knowledge base was indexed:
 
 ```bash
 ES_URL=$(agent variable get ES_URL)
@@ -232,25 +255,23 @@ for the AI agent to query during a live incident.
 
 ---
 
-## Step 5 — Validate: Find the Unified Service Tag
+## Step 4 — Validate: Confirm the Deployment
 
-To complete this challenge, run the validation script:
+Run the validation script to confirm the scenario is active and the Elastic
+deployment completed:
 
 ```bash
 /root/exxon-otel/check-unified-tags.sh
 ```
 
-The script verifies the Exxon scenario is running and that the Elastic
-deployment completed successfully.
-
-A successful validation prints:
+A successful run prints:
 
 ```
   ✓ Exxon scenario is active
   ✓ Challenge 1 complete — unified APM and logs with OTel
 ```
 
-> **Tip:** You can also check deploy progress from the Terminal:
+> **Tip:** Check deployment progress at any time:
 > ```bash
 > curl -sf http://localhost:8090/api/setup/progress | python3 -m json.tool
 > ```
@@ -261,10 +282,10 @@ A successful validation prints:
 
 | Before (Datadog + Splunk) | After (Elastic Serverless + OTel) |
 |---|---|
-| Separate APM and log searches across 2 UIs | One ES|QL query across traces, metrics, and logs |
-| Log pipeline creation failing in Datadog | No pipeline code — OTel OTLP accepted natively |
-| OTel configs "orphaned" — nobody owns them | Standard OTel exporter URL — any collector works |
-| No cost visibility across storage engines | Single Elastic Serverless project, one bill |
+| Separate APM and log searches across 2 UIs | One ES\|QL query across traces, metrics, and logs |
+| Log pipeline creation failing in Datadog | No pipeline code — OTLP accepted natively |
+| OTel configs orphaned — nobody owns the backend | One endpoint URL. Elastic manages the collector. |
+| Datadog + Splunk storage bills | Single Elastic Serverless project, one bill |
 
-> **"All the messages and logs per app in one dashboard"** — this is that
-> dashboard. Continue to Challenge 2 to bring in the legacy network layer.
+> **"All the messages and logs per app in one dashboard"** — that's what
+> just deployed. Continue to Challenge 2 to bring in the legacy network layer.
