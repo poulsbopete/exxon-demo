@@ -177,6 +177,7 @@ class ServiceManager:
         from log_generators.nginx_metrics_generator import run as run_nginx_metrics
         from log_generators.vpc_flow_generator import run as run_vpc
         from log_generators.jvm_metrics_generator import run as run_jvm
+        from log_generators.app_log_generator import run as run_app_logs
 
         # Build scenario_data dict from context for scenario-dependent generators
         scenario_data = None
@@ -221,6 +222,8 @@ class ServiceManager:
             ("gen-nginx-metrics", run_nginx_metrics, common_args, common_kwargs),
             ("gen-jvm-metrics", run_jvm, common_args, common_kwargs),
             ("gen-vpc-flow", run_vpc, common_args, common_kwargs),
+            # Sends Exxon service logs WITHOUT data_stream.* → lands in logs.otel
+            ("gen-app-logs", run_app_logs, common_args, common_kwargs),
         ]
 
         # Start the fault-log emitter as a separate daemon thread.
