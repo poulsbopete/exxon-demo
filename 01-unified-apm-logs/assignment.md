@@ -152,7 +152,7 @@ Demo App.
 
 ### AI Agent
 
-In the **left navigation**, click **AI Agent** (not the chat bubble icon in the top bar — that is the legacy AI Assistant which requires ELSER). Open **exxon-infrastructure-analyst**.
+Click **AI Agent** in the top-right corner of Kibana to open the agent panel. Select **exxon-infrastructure-analyst**.
 
 Ask:
 > *"What fault channels are configured for Exxon's network infrastructure?"*

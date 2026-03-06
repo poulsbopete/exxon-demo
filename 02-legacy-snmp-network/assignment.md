@@ -212,7 +212,7 @@ the WAN team and the app team simultaneously from one platform.
 
 ## Step 4 — Ask the AI Agent
 
-In the **left navigation**, click **AI Agent** (not the chat bubble icon in the top bar — that is the legacy AI Assistant). Ask the
+Click **AI Agent** in the top-right corner of Kibana to open the agent panel. Ask the
 **exxon-infrastructure-analyst**:
 
 > *"Show me the SNMP circuit flap events and which application services

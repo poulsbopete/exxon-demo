@@ -173,7 +173,7 @@ Look at the timeline and identify the spike window. The dashboard shows:
 
 ## Step 3 — Ask the AI Agent
 
-In the **left navigation**, click **AI Agent** (not the chat bubble icon in the top bar — that is the legacy AI Assistant). Open the
+Click **AI Agent** in the top-right corner of Kibana to open the agent panel. Open the
 **exxon-infrastructure-analyst** agent.
 
 Ask the following questions to walk through the root cause investigation:
