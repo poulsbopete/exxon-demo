@@ -179,19 +179,28 @@ Click **AI Agent** in the top-right corner of Kibana to open the agent panel. Op
 Ask the following questions to walk through the root cause investigation:
 
 **Question 1 — Start with the user:**
-> *"What is happening with user jsmith@exxon.com on host avd-mid-w10-042?"*
+
+```
+What is happening with user jsmith@exxon.com on host avd-mid-w10-042?
+```
 
 **Question 2 — Check the network:**
-> *"Is there circuit jitter on the Midland MPLS path and is it causing
-> authentication failures?"*
+
+```
+Is there circuit jitter on the Midland MPLS path and is it causing authentication failures?
+```
 
 **Question 3 — Check Zero Trust:**
-> *"Is AppGate denying access to audit.exxon.internal for Midland users?
-> What is the deny reason?"*
+
+```
+Is AppGate denying access to audit.exxon.internal for Midland users? What is the deny reason?
+```
 
 **Question 4 — Identify root cause:**
-> *"Is the Midland AVD issue caused by AWS fallback latency, Jitter DNS,
-> or an AppGate policy block? What is the remediation?"*
+
+```
+Is the Midland AVD issue caused by AWS fallback latency, Jitter DNS, or an AppGate policy block? What is the remediation?
+```
 
 The agent correlates across SNMP traps, ThousandEyes circuit metrics,
 AppGate audit logs, Windows Event IDs, and AVD session data using

@@ -155,9 +155,14 @@ Demo App.
 Click **AI Agent** in the top-right corner of Kibana to open the agent panel. Select **exxon-infrastructure-analyst**.
 
 Ask:
-> *"What fault channels are configured for Exxon's network infrastructure?"*
 
-> *"Which Azure API services have the highest error rates?"*
+```
+What fault channels are configured for Exxon's network infrastructure?
+```
+
+```
+Which Azure API services have the highest error rates?
+```
 
 ### Alert Rules
 

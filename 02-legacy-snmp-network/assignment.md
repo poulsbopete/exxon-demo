@@ -215,11 +215,13 @@ the WAN team and the app team simultaneously from one platform.
 Click **AI Agent** in the top-right corner of Kibana to open the agent panel. Ask the
 **exxon-infrastructure-analyst**:
 
-> *"Show me the SNMP circuit flap events and which application services
-> they are correlated with."*
+```
+Show me the SNMP circuit flap events and which application services they are correlated with.
+```
 
-> *"What Cisco switch is flapping at the Houston refinery and what business
-> service does it support?"*
+```
+What Cisco switch is flapping at the Houston refinery and what business service does it support?
+```
 
 The agent uses ES|QL to query `logs*` for SNMP trap events and
 cross-references `api-gateway` error logs — the same correlation that
