@@ -241,28 +241,37 @@ Midland MPLS jitter > 45ms (ThousandEyes TE-MID-001)
 
 ## Step 5 — Validate with ES|QL
 
-In the **Elastic Serverless** tab, navigate to **Discover** and try ES|QL
-to confirm the 5-signal correlation:
+In the **Elastic Serverless** tab, navigate to **Discover** and switch to
+**ES|QL** mode. Run these two queries to confirm the 5-signal correlation.
 
-```sql
-FROM logs-*, metrics-*
-| WHERE user.name == "jsmith" OR network.site == "Midland-Field-Ops"
+**Query 1 — Which fault channels are firing right now?**
+
+```
+FROM fault-events-exxon
 | WHERE @timestamp > NOW() - 30 minutes
-| STATS
-    snmp_events    = COUNT_IF(snmp.trap.type == "linkDown"),
-    auth_failures  = COUNT_IF(winlog.event_id == 4625),
-    appgate_denies = COUNT_IF(appgate.deny.reason IS NOT NULL),
-    avd_reconnects = COUNT_IF(session.reconnect_count > 0)
-| EVAL root_cause = CASE(
-    snmp_events > 0 AND auth_failures > 3, "JITTER_DNS",
-    appgate_denies > 0, "APPGATE_POLICY",
-    "AWS_FALLBACK"
-  )
+| STATS event_count = COUNT(*), services = VALUES(service.name) BY fault.error_type
+| SORT event_count DESC
 ```
 
-> **This single query** spans ThousandEyes (SNMP), Windows Event Log,
-> AppGate audit, and AVD metrics — correlating what four separate tools
-> see independently. Exxon has never had this query before.
+You will see `circuit_degradation`, `cert_expiry`, `session_degradation`,
+and `auth_failure_storm` — the four compounding EUX faults you injected.
+
+**Query 2 — Which services have the highest error rate in the last 30 minutes?**
+
+```
+FROM logs*
+| WHERE @timestamp > NOW() - 30 minutes AND severity_text == "ERROR"
+| STATS error_count = COUNT(*) BY service.name
+| SORT error_count DESC
+| LIMIT 10
+```
+
+You will see `avd-broker`, `azure-ad-proxy`, and `network-monitor` at the
+top — the exact services impacted by the Midland MPLS + AppGate fault chain.
+
+> **These two queries** — one across fault events, one across OTLP application
+> logs — replace what today requires four separate tool logins and a 45-minute
+> Slack war room.
 
 ---
 
