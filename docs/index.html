@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exxon Infrastructure 2.0 — Elastic Serverless Unified Observability</title>
+
+  <!-- Reveal.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    /* ── Brand tokens ──────────────────────────────────────────────── */
+    :root {
+      --exxon-red:   #EE0000;
+      --elastic-teal:#00bfb3;
+      --bg-dark:     #0a0a0a;
+      --bg-card:     #141414;
+      --bg-panel:    #1c1c1c;
+      --text-muted:  #888;
+      --text-dim:    #555;
+      --border:      #2a2a2a;
+    }
+
+    /* ── Base overrides ────────────────────────────────────────────── */
+    .reveal { font-family: 'Inter', system-ui, sans-serif; }
+    .reveal .slides { text-align: left; }
+    .reveal section { padding: 0 !important; }
+    .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+      font-family: 'Inter', system-ui, sans-serif;
+      text-transform: none;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+    }
+
+    /* ── Slide wrappers ────────────────────────────────────────────── */
+    .slide {
+      width: 100%;
+      height: 100%;
+      padding: 52px 64px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--bg-dark);
+      position: relative;
+      overflow: hidden;
+    }
+    .slide::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--exxon-red), var(--elastic-teal));
+    }
+
+    /* ── Title slide ───────────────────────────────────────────────── */
+    .slide-title {
+      text-align: center;
+      align-items: center;
+    }
+    .slide-title .eyebrow {
+      font-size: 0.75em;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--elastic-teal);
+      margin-bottom: 20px;
+    }
+    .slide-title h1 {
+      font-size: 2.6em;
+      font-weight: 700;
+      color: #fff;
+      margin: 0 0 12px;
+      line-height: 1.1;
+    }
+    .slide-title h1 span { color: var(--exxon-red); }
+    .slide-title .sub {
+      font-size: 1.05em;
+      color: var(--text-muted);
+      margin-bottom: 40px;
+    }
+    .slide-title .tagline {
+      display: inline-block;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--exxon-red);
+      padding: 14px 24px;
+      font-size: 0.9em;
+      color: #ccc;
+      font-style: italic;
+      border-radius: 4px;
+    }
+
+    /* ── Section header ────────────────────────────────────────────── */
+    .slide-section {
+      text-align: center;
+      align-items: center;
+      background: linear-gradient(135deg, #0a0a0a 0%, #111 100%);
+    }
+    .section-num {
+      font-size: 5em;
+      font-weight: 700;
+      color: var(--exxon-red);
+      opacity: 0.25;
+      line-height: 1;
+      margin-bottom: -10px;
+    }
+    .section-label {
+      font-size: 0.7em;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--elastic-teal);
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: 2.2em;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+    .section-sub {
+      font-size: 0.9em;
+      color: var(--text-muted);
+      margin-top: 12px;
+    }
+
+    /* ── Typography helpers ────────────────────────────────────────── */
+    .slide h2 { font-size: 1.8em; font-weight: 700; color: #fff; margin: 0 0 28px; }
+    .slide h3 { font-size: 1.2em; font-weight: 600; color: #ddd; margin: 0 0 16px; }
+    .eyebrow-sm {
+      font-size: 0.65em;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--elastic-teal);
+      margin-bottom: 10px;
+      display: block;
+    }
+    .red { color: var(--exxon-red); }
+    .teal { color: var(--elastic-teal); }
+    .muted { color: var(--text-muted); }
+    .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+
+    /* ── Cards & grids ─────────────────────────────────────────────── */
+    .card-grid {
+      display: grid;
+      gap: 16px;
+    }
+    .card-grid-2 { grid-template-columns: 1fr 1fr; }
+    .card-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .card-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 22px;
+    }
+    .card.red-border  { border-left: 3px solid var(--exxon-red); }
+    .card.teal-border { border-left: 3px solid var(--elastic-teal); }
+    .card.warn-border { border-left: 3px solid #f59e0b; }
+
+    .card-icon { font-size: 1.6em; margin-bottom: 8px; }
+    .card-title { font-size: 0.85em; font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .card-body  { font-size: 0.75em; color: var(--text-muted); line-height: 1.5; }
+    .card-num   { font-size: 2em; font-weight: 700; color: var(--exxon-red); line-height: 1; }
+    .card-label { font-size: 0.72em; color: var(--text-muted); margin-top: 4px; }
+
+    /* ── Comparison table ──────────────────────────────────────────── */
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8em;
+    }
+    .compare-table th {
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 0.8em;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .compare-table td {
+      padding: 10px 16px;
+      border-bottom: 1px solid #1a1a1a;
+      color: #ccc;
+      vertical-align: top;
+    }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-table .col-before { color: #f87171; }
+    .compare-table .col-after  { color: #4ade80; }
+    .compare-table .col-metric { color: #fff; font-weight: 500; }
+
+    /* ── Code block ────────────────────────────────────────────────── */
+    .code-block {
+      background: #111;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 18px 22px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72em;
+      color: #e2e8f0;
+      line-height: 1.6;
+      overflow: hidden;
+    }
+    .code-comment { color: #555; }
+    .code-key     { color: var(--elastic-teal); }
+    .code-val     { color: #fbbf24; }
+    .code-string  { color: #86efac; }
+    .code-op      { color: #c084fc; }
+
+    /* ── Pain points list ──────────────────────────────────────────── */
+    .pain-list { list-style: none; padding: 0; margin: 0; }
+    .pain-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #1a1a1a;
+      font-size: 0.85em;
+      color: #ccc;
+    }
+    .pain-list li:last-child { border-bottom: none; }
+    .pain-list .icon { font-size: 1.1em; flex-shrink: 0; margin-top: 2px; }
+    .pain-list .label { font-weight: 600; color: #fff; }
+
+    /* ── Steps ─────────────────────────────────────────────────────── */
+    .steps { display: flex; flex-direction: column; gap: 10px; }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 18px;
+      font-size: 0.82em;
+    }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--exxon-red);
+      color: #fff;
+      font-size: 0.85em;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-num.teal { background: var(--elastic-teal); color: #000; }
+    .step-text { color: #ccc; }
+    .step-text strong { color: #fff; }
+
+    /* ── Two-col layout ────────────────────────────────────────────── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+    .two-col-60 { display: grid; grid-template-columns: 60fr 40fr; gap: 32px; align-items: start; }
+
+    /* ── Stat callout ──────────────────────────────────────────────── */
+    .stat-row { display: flex; gap: 24px; margin-top: 24px; }
+    .stat {
+      text-align: center;
+      flex: 1;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 12px;
+    }
+    .stat-num  { font-size: 2.2em; font-weight: 700; color: var(--exxon-red); line-height: 1; }
+    .stat-unit { font-size: 0.9em; color: var(--text-muted); }
+    .stat-desc { font-size: 0.7em; color: var(--text-muted); margin-top: 6px; line-height: 1.4; }
+
+    /* ── Badge ─────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      font-size: 0.65em;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .badge-red  { background: rgba(238,0,0,0.15); color: var(--exxon-red); border: 1px solid rgba(238,0,0,0.3); }
+    .badge-teal { background: rgba(0,191,179,0.12); color: var(--elastic-teal); border: 1px solid rgba(0,191,179,0.3); }
+    .badge-gray { background: #1e1e1e; color: #888; border: 1px solid #333; }
+
+    /* ── Footer logo area ──────────────────────────────────────────── */
+    .slide-footer {
+      position: absolute;
+      bottom: 20px;
+      right: 32px;
+      font-size: 0.6em;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slide-footer .sep { color: var(--border); }
+
+    /* ── Reveal theme overrides ────────────────────────────────────── */
+    .reveal .progress { color: var(--exxon-red); }
+    .reveal .controls { color: var(--exxon-red); }
+    .reveal .slide-number { color: var(--text-dim); font-size: 0.55em; }
+    .reveal blockquote {
+      background: var(--bg-panel);
+      border-left: 3px solid var(--elastic-teal);
+      padding: 14px 20px;
+      margin: 0;
+      font-size: 0.85em;
+      color: #ccc;
+      font-style: italic;
+      border-radius: 0 6px 6px 0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 1 — TITLE
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide slide-title">
+    <div class="eyebrow">Elastic Serverless · Observability Demo</div>
+    <h1>Exxon<span> Infrastructure 2.0</span></h1>
+    <div class="sub">Unified Observability — One Platform, Every Signal</div>
+    <div class="tagline">
+      Replacing Datadog · Splunk · OpenNMS · ThousandEyes with a single Elastic Serverless project
+    </div>
+    <div class="slide-footer">
+      <span>Elastic</span><span class="sep">·</span><span>Confidential</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 2 — THE PROBLEM (EXEC)
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">The Problem</span>
+    <h2>Exxon's Observability Landscape Today</h2>
+    <div class="card-grid card-grid-4">
+      <div class="card red-border">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Datadog</div>
+        <div class="card-body">APM traces for Azure API services — but log pipelines fail to create</div>
+      </div>
+      <div class="card red-border">
+        <div class="card-icon">🔍</div>
+        <div class="card-title">Splunk</div>
+        <div class="card-body">Application logs — but 30-min gaps during index rollover, no APM correlation</div>
+      </div>
+      <div class="card red-border">
+        <div class="card-icon">🌐</div>
+        <div class="card-title">OpenNMS</div>
+        <div class="card-body">SNMP network monitoring — but app teams have zero visibility into network events</div>
+      </div>
+      <div class="card red-border">
+        <div class="card-icon">📡</div>
+        <div class="card-title">ThousandEyes</div>
+        <div class="card-body">WAN circuit monitoring — but no correlation to Datadog APM or Splunk logs</div>
+      </div>
+    </div>
+    <div class="stat-row" style="margin-top:20px;">
+      <div class="stat">
+        <div class="stat-num">4</div>
+        <div class="stat-desc">separate tools with no common data model</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">4</div>
+        <div class="stat-desc">separate vendor bills &amp; renewal cycles</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">45<span class="stat-unit">min</span></div>
+        <div class="stat-desc">manual war room time to correlate a single incident</div>
+      </div>
+      <div class="stat">
+        <div class="stat-num">0</div>
+        <div class="stat-desc">tools that can answer "how is the network affecting the user?"</div>
+      </div>
+    </div>
+    <div class="slide-footer"><span>The Problem</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 3 — PAIN POINTS
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">Root Causes</span>
+    <h2>What Exxon's Teams Say Today</h2>
+    <ul class="pain-list">
+      <li>
+        <span class="icon">🔴</span>
+        <div><span class="label">Messy APM</span> — Log pipeline creation fails in Datadog; traces land but application logs are dropped.
+        4,821 log records lost per incident.</div>
+      </li>
+      <li>
+        <span class="icon">🔴</span>
+        <div><span class="label">"Nobody knows what to do with OpenTelemetry"</span> — OTel collector configs are orphaned,
+        pointing at a decommissioned Datadog endpoint. 12,450 spans dropped. Last working: 200+ days ago.</div>
+      </li>
+      <li>
+        <span class="icon">🔴</span>
+        <div><span class="label">Network invisible to app teams</span> — OpenNMS sees the Cisco SNMP linkDown trap.
+        Datadog does not. A 3-flap circuit at Houston Refinery takes 45 minutes to correlate to the api-gateway errors it causes.</div>
+      </li>
+      <li>
+        <span class="icon">🔴</span>
+        <div><span class="label">"Jitter DNS" — Exxon's internal term for a known WAN problem</span> — MPLS jitter on the
+        Midland circuit causes Azure AD auth timeouts, Event ID 4625 storms, account lockouts.
+        WAN team, AD team, desktop team, and security team never see the same dashboard.</div>
+      </li>
+    </ul>
+    <div class="slide-footer"><span>Pain Points</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 4 — THE PLATFORM
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">The Solution</span>
+    <h2>Elastic Serverless — One Project, Every Signal</h2>
+    <div class="two-col">
+      <div>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text"><strong>OTLP Ingest</strong> — Azure API services &amp; OpenShift K8s send traces,
+            metrics, and logs to a single managed HTTPS endpoint. No collector backend to operate.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text"><strong>SNMP Integration</strong> — Cisco switch traps enriched with
+            ServiceNow CMDB data land in the same platform as APM, enabling one ES|QL query to correlate network and application events.</div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text"><strong>End-User Experience</strong> — AVD session metrics, Windows Event IDs,
+            AppGate audit logs, iboss connections, and ThousandEyes circuit data joined on
+            <code>user.name</code> and <code>network.site</code>.</div>
+          </div>
+          <div class="step">
+            <div class="step-num teal">AI</div>
+            <div class="step-text"><strong>AI Agent</strong> — Pre-configured with 9 ES|QL tools and a
+            knowledge base of Exxon's 12 known fault channels. Root cause in a single prompt.</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card teal-border" style="margin-bottom:12px;">
+          <div class="card-title">🎯 Managed OTLP Ingest Endpoint</div>
+          <div class="code-block" style="margin-top:10px; font-size:0.8em;">
+<span class="code-key">endpoint:</span> <span class="code-string">"https://&lt;project&gt;.ingest<br>  .&lt;region&gt;.aws.elastic.cloud:443"</span><br>
+<span class="code-key">headers:</span><br>
+&nbsp;&nbsp;<span class="code-key">Authorization:</span> <span class="code-string">"ApiKey &lt;key&gt;"</span>
+          </div>
+          <div class="card-body" style="margin-top:10px;">One line change to any OTel config. Elastic manages the collector backend.</div>
+        </div>
+        <div class="card teal-border">
+          <div class="card-title">📐 OpenTelemetry Semantic Conventions</div>
+          <div class="card-body">All signals share <code>service.name</code>, <code>user.name</code>,
+          and <code>network.site</code> as join keys — enabling ES|QL to correlate across every data type.</div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><span>The Platform</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 5 — CHALLENGE 1 SECTION HEADER
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide slide-section">
+    <div class="section-num">01</div>
+    <div class="section-label">Challenge</div>
+    <div class="section-title">Unifying Modern APM and Logs with OTel</div>
+    <div class="section-sub">From orphaned OTel configs to a unified traces + metrics + logs stream</div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 6 — CHALLENGE 1 DETAIL
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">Challenge 1 — OTel Unification</span>
+    <h2>One Endpoint URL. Zero Pipeline Code.</h2>
+    <div class="two-col-60">
+      <div>
+        <div class="card red-border" style="margin-bottom: 14px;">
+          <div class="card-title">❌ Before — Exxon's Orphaned OTel Config</div>
+          <div class="code-block" style="margin-top:10px;">
+<span class="code-comment"># Last updated 200+ days ago</span><br>
+<span class="code-key">exporters:</span><br>
+&nbsp;&nbsp;<span class="code-key">datadog/exporter:</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-key">api:</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-key">key:</span> <span class="code-val">"&lt;revoked&gt;"</span> <span class="code-comment"># 401 errors</span><br>
+<span class="code-comment"># 12,450 spans dropped. Nobody owns this.</span>
+          </div>
+        </div>
+        <div class="card teal-border">
+          <div class="card-title">✅ After — One Line Change</div>
+          <div class="code-block" style="margin-top:10px;">
+<span class="code-key">exporters:</span><br>
+&nbsp;&nbsp;<span class="code-key">otlphttp/elastic:</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-key">endpoint:</span> <span class="code-string">"https://&lt;project&gt;.ingest<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;.&lt;region&gt;.aws.elastic.cloud:443"</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-key">headers:</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-key">Authorization:</span> <span class="code-string">"ApiKey &lt;key&gt;"</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3>What Lands in Elastic Serverless</h3>
+        <ul class="pain-list">
+          <li><span class="icon">✅</span><div><span class="label">logs.otel</span> — Application logs from all Azure API services</div></li>
+          <li><span class="icon">✅</span><div><span class="label">traces-generic.otel-default</span> — Distributed traces from api-gateway, payment-processor, inventory-service</div></li>
+          <li><span class="icon">✅</span><div><span class="label">metrics-generic.otel-default</span> — Host &amp; service metrics</div></li>
+          <li><span class="icon">✅</span><div><span class="label">metrics-kubernetes.container.otel-default</span> — OpenShift pod &amp; container metrics</div></li>
+        </ul>
+        <blockquote style="margin-top:16px;">
+          "All the messages and logs per app in one dashboard"
+        </blockquote>
+      </div>
+    </div>
+    <div class="slide-footer"><span>Challenge 1</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 7 — CHALLENGE 1 DEMO ASSETS
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">Challenge 1 — What Gets Auto-Deployed</span>
+    <h2>The Demo App Deploys All of This in Minutes</h2>
+    <div class="card-grid card-grid-3" style="margin-bottom:16px;">
+      <div class="card teal-border">
+        <div class="card-icon">📈</div>
+        <div class="card-title">Executive Dashboard</div>
+        <div class="card-body">"Exxon Infrastructure 2.0" — APM traces, K8s pod CPU, error rates, P99 latency — all in one Kibana dashboard.</div>
+      </div>
+      <div class="card teal-border">
+        <div class="card-icon">🤖</div>
+        <div class="card-title">AI Agent</div>
+        <div class="card-body"><code>exxon-infrastructure-analyst</code> — 9 ES|QL tools, 12 knowledge base documents covering every known fault channel.</div>
+      </div>
+      <div class="card teal-border">
+        <div class="card-icon">🔔</div>
+        <div class="card-title">Alert Rules</div>
+        <div class="card-body">12 alert rules — one per Exxon fault channel — all using ES|QL, all in one alerting engine. In Datadog + Splunk, these are 12 separate projects.</div>
+      </div>
+    </div>
+    <div class="card-grid card-grid-3">
+      <div class="card">
+        <div class="card-icon">⚡</div>
+        <div class="card-title">Wired Streams</div>
+        <div class="card-body">Auto-routing OTLP signals into the right stream without any pipeline config or index templates.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔄</div>
+        <div class="card-title">Remediation Workflows</div>
+        <div class="card-body">4 automated workflows — triggered by alerts — covering notification, remediation, escalation, and hold.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Significant Events</div>
+        <div class="card-body">12 ES|QL stream queries that surface critical error patterns directly in the Streams view.</div>
+      </div>
+    </div>
+    <div class="slide-footer"><span>Challenge 1</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 8 — CHALLENGE 2 SECTION HEADER
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide slide-section">
+    <div class="section-num">02</div>
+    <div class="section-label">Challenge</div>
+    <div class="section-title">Taming Legacy Network Infrastructure</div>
+    <div class="section-sub">SNMP traps + CMDB enrichment + APM correlation — in a single ES|QL query</div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 9 — CHALLENGE 2 DETAIL
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">Challenge 2 — SNMP + Network Correlation</span>
+    <h2>Network Events &amp; APM in the Same Platform</h2>
+    <div class="two-col">
+      <div>
+        <h3>The Scenario</h3>
+        <ul class="pain-list">
+          <li><span class="icon">🔴</span><div><span class="label">Cisco circuit flap</span> — GigabitEthernet0/47 on cisco-sw-houston-01 flaps 3× in 5 minutes</div></li>
+          <li><span class="icon">⚠️</span><div><span class="label">OpenNMS sees it</span> — SNMP linkDown trap received. App team in Datadog? Zero visibility.</div></li>
+          <li><span class="icon">🔴</span><div><span class="label">api-gateway errors spike</span> — upstream connection resets from Houston-Refinery-Campus correlate directly — but nobody connects the dots</div></li>
+          <li><span class="icon">✅</span><div><span class="label">Elastic correlation</span> — SNMP trap + APM error, same platform, one ES|QL query, shared <code>network.site</code> join key</div></li>
+        </ul>
+        <div style="margin-top:14px;">
+          <blockquote>"What Cisco switch is flapping at Houston and what business service does it support?"</blockquote>
+        </div>
+      </div>
+      <div>
+        <h3>The ES|QL Queries</h3>
+        <div class="code-block" style="font-size:0.72em; margin-bottom:10px;">
+<span class="code-comment">-- 1. Find SNMP trap events</span><br>
+<span class="code-op">FROM</span> logs*<br>
+<span class="code-op">| WHERE</span> <span class="code-key">snmp.trap.type</span> <span class="code-op">IS NOT NULL</span><br>
+<span class="code-op">| KEEP</span> @timestamp, device.hostname,<br>
+&nbsp;&nbsp;snmp.trap.type, network.site<br>
+<span class="code-op">| SORT</span> @timestamp <span class="code-op">DESC</span>
+        </div>
+        <div class="code-block" style="font-size:0.72em;">
+<span class="code-comment">-- 2. Cross-correlate: network + APM</span><br>
+<span class="code-op">FROM</span> logs*<br>
+<span class="code-op">| WHERE</span> (<span class="code-key">snmp.trap.type</span> <span class="code-op">IS NOT NULL</span><br>
+&nbsp;&nbsp;<span class="code-op">OR</span> <span class="code-key">service.name</span> <span class="code-op">==</span> <span class="code-string">"api-gateway"</span>)<br>
+<span class="code-op">| STATS</span> event_count <span class="code-op">= COUNT(*)</span><br>
+&nbsp;&nbsp;<span class="code-op">BY</span> network.site, service.name<br>
+<span class="code-op">| SORT</span> event_count <span class="code-op">DESC</span>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><span>Challenge 2</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 10 — CHALLENGE 3 SECTION HEADER
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide slide-section">
+    <div class="section-num">03</div>
+    <div class="section-label">Challenge</div>
+    <div class="section-title">The Single Pane of Glass for End-User Experience</div>
+    <div class="section-sub">"How is the machine functioning for the user?"</div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 11 — CHALLENGE 3 DETAIL
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">Challenge 3 — End-User Experience</span>
+    <h2>5 Signals. 1 Dashboard. Root Cause in Seconds.</h2>
+    <div class="two-col">
+      <div>
+        <h3>The Scenario: jsmith@exxon.com</h3>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num teal">6</div>
+            <div class="step-text"><strong>Midland MPLS jitter 47ms</strong> — ThousandEyes agent TE-MID-001 detects circuit degradation on Midland-to-Azure path</div>
+          </div>
+          <div class="step">
+            <div class="step-num teal">9</div>
+            <div class="step-text"><strong>AppGate cert expired</strong> — Device certificate on avd-mid-w10-042 expired 5 days ago; Audit-System-Access entitlement denied</div>
+          </div>
+          <div class="step">
+            <div class="step-num teal">10</div>
+            <div class="step-text"><strong>AVD session storm</strong> — 14 Midland field engineers disconnecting; logon time 38s vs. 5s SLO</div>
+          </div>
+          <div class="step">
+            <div class="step-num teal">11</div>
+            <div class="step-text"><strong>"Jitter DNS"</strong> — MPLS jitter causes DNS RTT 142ms → Kerberos auth timeouts → Event ID 4625 storm → account lockout</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3>5 Data Sources Unified</h3>
+        <div class="card-grid" style="grid-template-columns:1fr 1fr; gap:8px;">
+          <div class="card" style="padding:12px 14px;">
+            <div class="card-title" style="font-size:0.75em;">🖥️ AVD Session Metrics</div>
+            <div class="card-body">Logon duration, FSLogix mount, pool health</div>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <div class="card-title" style="font-size:0.75em;">🪟 Windows Events</div>
+            <div class="card-body">Event IDs 4625, 4740 (lockout), 7036</div>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <div class="card-title" style="font-size:0.75em;">🔒 AppGate / iboss</div>
+            <div class="card-body">Zero Trust deny reasons, policy blocks</div>
+          </div>
+          <div class="card" style="padding:12px 14px;">
+            <div class="card-title" style="font-size:0.75em;">📡 ThousandEyes</div>
+            <div class="card-body">MPLS jitter, packet loss, DNS RTT</div>
+          </div>
+        </div>
+        <div class="card teal-border" style="margin-top:10px; padding:12px 14px;">
+          <div class="card-title">Join Key: <code>user.name</code> + <code>network.site</code></div>
+          <div class="card-body">All 5 data types share these ECS fields — ES|QL correlates them in milliseconds. Without Elastic: 45-minute war room.</div>
+        </div>
+      </div>
+    </div>
+    <div class="slide-footer"><span>Challenge 3</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 12 — BEFORE / AFTER COMPARISON
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">The Outcome</span>
+    <h2>Before vs. After</h2>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th class="col-before">❌ Before (Datadog + Splunk + OpenNMS + ThousandEyes)</th>
+          <th class="col-after">✅ After (Elastic Serverless + OTel)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="col-metric">APM + Log correlation</td>
+          <td class="col-before">2 UIs, no common service identity, manual export to CSV</td>
+          <td class="col-after">One ES|QL query across traces, metrics, and logs by <code>service.name</code></td>
+        </tr>
+        <tr>
+          <td class="col-metric">OTel pipeline ownership</td>
+          <td class="col-before">Orphaned configs, 200 days without working export, "nobody owns it"</td>
+          <td class="col-after">Change one endpoint URL. Elastic manages the collector backend.</td>
+        </tr>
+        <tr>
+          <td class="col-metric">Network visibility for app teams</td>
+          <td class="col-before">OpenNMS knows. Datadog doesn't. 45-min war room to correlate.</td>
+          <td class="col-after">SNMP + APM in one platform. ES|QL joins on <code>network.site</code> in milliseconds.</td>
+        </tr>
+        <tr>
+          <td class="col-metric">End-user experience root cause</td>
+          <td class="col-before">4 teams, 4 tools, no shared user identity. Support tickets drive triage.</td>
+          <td class="col-after">AI Agent answers "what's wrong with jsmith@exxon.com" in one prompt.</td>
+        </tr>
+        <tr>
+          <td class="col-metric">Alert rules</td>
+          <td class="col-before">12 rules across 3 systems with different syntax and notification paths</td>
+          <td class="col-after">12 rules, one platform, one KQL/ES|QL syntax, one notification path</td>
+        </tr>
+        <tr>
+          <td class="col-metric">Time to onboard a new data source</td>
+          <td class="col-before">Weeks — new tool evaluation, index template, pipeline, alert</td>
+          <td class="col-after">Minutes — OTLP exporter URL change or Elastic Agent integration</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="slide-footer"><span>The Outcome</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 13 — COST & TIME TO VALUE
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">Business Value</span>
+    <h2>Cost &amp; Time to Value</h2>
+    <div class="two-col">
+      <div>
+        <div class="stat-row" style="flex-direction:column; gap:12px; margin-top:0;">
+          <div class="card teal-border">
+            <div class="card-grid card-grid-2" style="gap:0;">
+              <div style="padding-right:20px; border-right:1px solid var(--border);">
+                <div class="card-num" style="color:var(--exxon-red);">4×</div>
+                <div class="card-label">vendor tools replaced by one Elastic Serverless project</div>
+              </div>
+              <div style="padding-left:20px;">
+                <div class="card-num" style="color:var(--elastic-teal);">1×</div>
+                <div class="card-label">bill · one renewal · one support contract</div>
+              </div>
+            </div>
+          </div>
+          <div class="card teal-border">
+            <div class="card-grid card-grid-2" style="gap:0;">
+              <div style="padding-right:20px; border-right:1px solid var(--border);">
+                <div class="card-num" style="color:var(--exxon-red);">45<span style="font-size:0.5em; color:var(--text-muted);">min</span></div>
+                <div class="card-label">average war room duration today</div>
+              </div>
+              <div style="padding-left:20px;">
+                <div class="card-num" style="color:var(--elastic-teal);">&lt;60<span style="font-size:0.5em; color:var(--text-muted);">sec</span></div>
+                <div class="card-label">AI Agent root cause with Elastic</div>
+              </div>
+            </div>
+          </div>
+          <div class="card teal-border">
+            <div class="card-grid card-grid-2" style="gap:0;">
+              <div style="padding-right:20px; border-right:1px solid var(--border);">
+                <div class="card-num" style="color:var(--exxon-red);">1,000<span style="font-size:0.4em;color:var(--text-muted);">+</span></div>
+                <div class="card-label">Azure API instances monitored today (partial)</div>
+              </div>
+              <div style="padding-left:20px;">
+                <div class="card-num" style="color:var(--elastic-teal);">All</div>
+                <div class="card-label">on one OTLP endpoint with no per-host licensing</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3>Time to Value in This Demo</h3>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num teal">✓</div>
+            <div class="step-text"><strong>~5 min</strong> — Elastic Serverless project provisioned, OTLP flowing, dashboard live</div>
+          </div>
+          <div class="step">
+            <div class="step-num teal">✓</div>
+            <div class="step-text"><strong>~5 min</strong> — 12 alert rules, 4 workflows, AI agent, 12 knowledge base docs deployed automatically</div>
+          </div>
+          <div class="step">
+            <div class="step-num teal">✓</div>
+            <div class="step-text"><strong>Immediately</strong> — SNMP + CMDB data loaded; ES|QL queries ready to run</div>
+          </div>
+          <div class="step">
+            <div class="step-num teal">✓</div>
+            <div class="step-text"><strong>On demand</strong> — Fault injection triggers live alerts and auto-remediation workflows</div>
+          </div>
+        </div>
+        <blockquote style="margin-top:16px;">
+          Exxon's fragmented 4-tool observability stack, unified in a single demo session.
+        </blockquote>
+      </div>
+    </div>
+    <div class="slide-footer"><span>Business Value</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 14 — DEMO CTA
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide slide-title">
+    <div class="eyebrow">Ready to See It Live?</div>
+    <h1>Let's Run the <span>Demo</span></h1>
+    <div class="sub" style="margin-bottom:32px;">Instruqt-hosted · No setup required · 90-minute session</div>
+    <div class="card-grid card-grid-3" style="max-width:900px; text-align:left;">
+      <div class="card teal-border">
+        <div class="card-title">Challenge 1</div>
+        <div class="card-body">OTel unification — watch 1,000+ Azure API instances land in a single dashboard</div>
+      </div>
+      <div class="card teal-border">
+        <div class="card-title">Challenge 2</div>
+        <div class="card-body">SNMP + APM correlation — inject a Cisco circuit flap and trace it to API errors in ES|QL</div>
+      </div>
+      <div class="card teal-border">
+        <div class="card-title">Challenge 3</div>
+        <div class="card-body">EUX root cause — inject 4 compounding faults and let the AI Agent diagnose jsmith's session in seconds</div>
+      </div>
+    </div>
+    <div style="margin-top:32px; display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">
+      <span class="badge badge-teal">● Live Demo Available</span>
+      <span class="badge badge-gray">Elastic Serverless Observability</span>
+      <span class="badge badge-gray">OTel Native</span>
+      <span class="badge badge-gray">AI Agent</span>
+      <span class="badge badge-gray">ES|QL</span>
+    </div>
+    <div class="slide-footer"><span>Elastic · Exxon Infrastructure 2.0</span></div>
+  </div>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    transition: 'fade',
+    transitionSpeed: 'fast',
+    backgroundTransition: 'fade',
+    controls: true,
+    progress: true,
+    center: false,
+    width: 1280,
+    height: 720,
+    margin: 0,
+    minScale: 0.2,
+    maxScale: 2.0,
+    plugins: [],
+  });
+</script>
+</body>
+</html>
