@@ -1060,17 +1060,18 @@ def _build_dashboard_ndjson(
     })
 
     # p26: Significant Event Logs (ES|QL datatable with body.text, trace.id, span.id)
-    # Build ES|QL WHERE clause matching only configured significant event error types
+    # FROM logs* matches logs.otel, logs-nginx.access.otel-default, etc.
+    # KQL() is not valid inside ES|QL — use native LIKE / == comparisons.
     if error_types:
-        kql_parts = " OR ".join(
-            f'body.text: \\"{et}\\"' for et in error_types
+        like_parts = " OR ".join(
+            f'body.text LIKE "%{et}%"' for et in error_types
         )
-        esql_where = f'severity_text == "ERROR" AND KQL("{kql_parts}")'
+        esql_where = f'severity_text == "ERROR" AND ({like_parts})'
     else:
         esql_where = 'severity_text == "ERROR"'
 
     esql_query = (
-        f"FROM logs,logs.* "
+        f"FROM logs* "
         f"| WHERE {esql_where} "
         f"| KEEP body.text, trace.id, span.id, service.name, @timestamp "
         f"| SORT @timestamp DESC "
