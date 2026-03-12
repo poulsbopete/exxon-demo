@@ -1353,6 +1353,39 @@ When the user asks you to fix or remediate this issue, use remediation_action to
 
         notify(self.progress)
 
+        # Import the Connectivity dashboard immediately after the exec dashboard
+        self._deploy_connectivity_dashboard(client, notify)
+
+    def _deploy_connectivity_dashboard(self, client: httpx.Client, notify: ProgressCallback):
+        """Import the Client Connectivity E2E — Command Center dashboard."""
+        try:
+            from elastic_config.dashboards.generate_connectivity_dashboard import (
+                generate_connectivity_dashboard_ndjson,
+            )
+            ndjson_str = generate_connectivity_dashboard_ndjson(self.scenario)
+            resp = client.post(
+                f"{self.kibana_url}/api/saved_objects/_import?overwrite=true",
+                headers={
+                    "kbn-xsrf": "true",
+                    "Authorization": f"ApiKey {self.api_key}",
+                },
+                files={"file": ("connectivity-dashboard.ndjson", ndjson_str.encode(), "application/x-ndjson")},
+            )
+            if resp.status_code < 300:
+                data = resp.json()
+                count = data.get("successCount", 0)
+                errors = data.get("errors", [])
+                if errors:
+                    logger.warning("Connectivity dashboard import errors: %s", errors[:3])
+                logger.info("Connectivity dashboard imported: %d objects", count)
+            else:
+                logger.warning(
+                    "Connectivity dashboard import HTTP %d: %s",
+                    resp.status_code, resp.text[:200],
+                )
+        except Exception as exc:
+            logger.warning("Connectivity dashboard import skipped: %s", exc)
+
     # ── Fault-events data stream bootstrap ────────────────────────────
 
     def _bootstrap_fault_index(self, client: httpx.Client) -> None:

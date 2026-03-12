@@ -153,10 +153,18 @@ Elastic in real time, today they need 4 separate tool logins.**
 
 ---
 
-## Step 2 — Open the Unified Dashboard
+## Step 2 — Open the Unified Dashboards
 
-Switch to the **Elastic Serverless** tab. Navigate to **Dashboards** →
-**"Exxon Infrastructure 2.0 Executive Dashboard"**.
+Switch to the **Elastic Serverless** tab. Navigate to **Dashboards**. You
+will see two pre-deployed dashboards:
+
+- **"Exxon Infrastructure 2.0 Executive Dashboard"** — APM traces, K8s
+  metrics, error rates, and Significant Event Logs
+- **"Client Connectivity E2E — Command Center"** — Reliability % tiles
+  for WAN, Zero Trust (AppGate, iboss), Application Services, and
+  Authentication — styled after Exxon's NOC command center view
+
+Open the **Client Connectivity E2E — Command Center** dashboard.
 
 Look at the timeline and identify the spike window. The dashboard shows:
 
