@@ -1,5 +1,5 @@
 version: "1"
-name: __SCENARIO_NAME__ — SLO Management and Service Evaluation Workflow
+name: __SCENARIO_NAME__ SLO Management and Service Evaluation
 enabled: true
 description: |
   Automatically evaluates all services and creates SLOs with relaxed targets.

@@ -563,7 +563,10 @@ class ScenarioDeployer:
                 step.detail = f"Deployed: {name}"
             else:
                 step.detail = f"Failed: {name} (HTTP {resp.status_code})"
-                logger.warning("Workflow %s deploy failed: %s", name, resp.text[:200])
+                logger.warning(
+                    "Workflow %s deploy failed: HTTP %s %s",
+                    name, resp.status_code, resp.text[:500],
+                )
             notify(self.progress)
 
         step.status = "ok" if step.items_done > 0 else "failed"
