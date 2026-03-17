@@ -1,0 +1,348 @@
+version: "1"
+name: __SCENARIO_NAME__ — SLO Management and Service Evaluation Workflow
+enabled: true
+description: |
+  Automatically evaluates all services and creates SLOs with relaxed targets.
+  Runs every 24 hours. IDEMPOTENT: Deletes all existing __SCENARIO_NAME__ SLOs,
+  then creates exactly 5 standard SLOs (no duplicates on re-run).
+
+  5 SLOs: Availability (95%), Latency (85% under 2s), Error Rate (95%),
+  AVD Session Reliability (98%), Network Circuit Availability (99%).
+  Uses environment-provided Kibana base URL + credentials (no hardcoded secrets).
+
+triggers:
+  - type: scheduled
+    with:
+      every: "24h"
+  - type: manual
+
+# ── Step 0: Banner ──────────────────────────────────────────────────────────
+steps:
+  - name: workflow-start
+    type: console
+    with:
+      message: |
+        ================================================
+        SLO Management and Service Evaluation Workflow
+        ================================================
+        Execution ID: {{ execution.id }}
+        Timestamp: {{ now | date: '%Y-%m-%d %H:%M:%S UTC' }}
+
+        IDEMPOTENT: This workflow deletes existing __SCENARIO_NAME__ SLOs
+        then creates exactly 5 SLOs. Safe to run multiple times.
+        ================================================
+
+# ── Step 1: Fetch all existing SLOs ────────────────────────────────────────
+  - name: get-all-existing-slos
+    type: kibana.request
+    on-failure:
+      continue: true
+    with:
+      method: GET
+      path: /api/observability/slos?perPage=500
+      timeout: "60"
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        kbn-xsrf: "true"
+
+# ── Step 2: Delete any existing __SCENARIO_NAME__ SLOs ─────────────────────
+  - name: delete-existing-slos
+    type: foreach
+    foreach: "{{ steps.get-all-existing-slos.output.results }}"
+    on-failure:
+      continue: true
+    steps:
+      - name: check-slo-belongs-to-scenario
+        type: if
+        # Match any SLO whose name contains our scenario identifier
+        condition: >-
+          foreach.item.name : *__SCENARIO_NAME__*
+        steps:
+          - name: log-deleting
+            type: console
+            with:
+              message: "Deleting SLO: {{ foreach.item.name | uniq }} ({{ foreach.item.id | uniq }})"
+          - name: delete-slo
+            type: kibana.request
+            on-failure:
+              continue: true
+            with:
+              method: DELETE
+              path: /api/observability/slos/{{ foreach.item.id | uniq }}
+              headers:
+                kbn-xsrf: "true"
+        else:
+          - name: log-skipping
+            type: console
+            with:
+              message: "Skipping (not __SCENARIO_NAME__): {{ foreach.item.name | uniq }}"
+
+# ── Step 3: Availability SLO ────────────────────────────────────────────────
+# Challenge 1 — OTel APM
+# Measures successful transactions across all Azure API services.
+# Replaces Datadog's per-service availability dashboards with a single,
+# grouped Elastic SLO. Target: 95% availability over a 7-day rolling window.
+  - name: create-slo-availability
+    type: kibana.request
+    with:
+      method: POST
+      path: /api/observability/slos
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        kbn-xsrf: "true"
+      body:
+        name: "__SCENARIO_NAME__ — Azure API Availability SLO"
+        description: >
+          Availability SLO for __SCENARIO_NAME__ Azure API services
+          (api-gateway, payment-processor, inventory-service).
+          Measures the fraction of OTel transactions without a failure
+          outcome across all services. Replaces the equivalent Datadog
+          per-service SLOs with a single grouped Elastic SLO.
+          Target: 95% over a 7-day rolling window.
+        indicator:
+          type: sli.kql.custom
+          params:
+            index: "traces-apm.rum-default*,traces-*.otel-*"
+            filter: "processor.event:transaction"
+            good: "NOT event.outcome:failure"
+            total: "*"
+            timestampField: "@timestamp"
+        groupBy:
+          - service.name
+        budgetingMethod: occurrences
+        timeWindow:
+          duration: 7d
+          type: rolling
+        objective:
+          target: 0.95
+        tags:
+          - "__NS__"
+          - "azure-api"
+          - "otel"
+          - "challenge-1"
+
+# ── Step 4: Latency SLO ─────────────────────────────────────────────────────
+# Challenge 1 — OTel APM
+# 85% of Azure API transactions must complete in under 2 seconds.
+# Directly addresses Exxon's concern about "messy APM data" — surfacing
+# per-service latency SLOs grouped by service.name from OTel attributes.
+  - name: create-slo-latency
+    type: kibana.request
+    with:
+      method: POST
+      path: /api/observability/slos
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        kbn-xsrf: "true"
+      body:
+        name: "__SCENARIO_NAME__ — Azure API Latency SLO"
+        description: >
+          Latency SLO for __SCENARIO_NAME__ Azure API services.
+          Measures the fraction of OTel transactions completing under 2 seconds
+          (2,000,000 microseconds) across all services.
+          Grouped by service.name so each Azure API service gets its own
+          latency budget. Target: 85% under 2s over a 7-day rolling window.
+        indicator:
+          type: sli.kql.custom
+          params:
+            index: "traces-apm.rum-default*,traces-*.otel-*"
+            filter: "processor.event:transaction AND transaction.duration.us:*"
+            good: "transaction.duration.us <= 2000000"
+            total: "transaction.duration.us:*"
+            timestampField: "@timestamp"
+        groupBy:
+          - service.name
+        budgetingMethod: occurrences
+        timeWindow:
+          duration: 7d
+          type: rolling
+        objective:
+          target: 0.85
+        tags:
+          - "__NS__"
+          - "azure-api"
+          - "otel"
+          - "challenge-1"
+
+# ── Step 5: Error Rate SLO ──────────────────────────────────────────────────
+# Challenge 1 — OTel APM
+# < 5% error rate across Azure API services. Replaces Datadog alert rules
+# with a unified Elastic SLO that shares the same service identity as logs
+# and metrics (the exact correlation that Exxon can't do today).
+  - name: create-slo-error-rate
+    type: kibana.request
+    with:
+      method: POST
+      path: /api/observability/slos
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        kbn-xsrf: "true"
+      body:
+        name: "__SCENARIO_NAME__ — Azure API Error Rate SLO"
+        description: >
+          Error Rate SLO for __SCENARIO_NAME__ Azure API services.
+          Measures the fraction of OTel transactions that do NOT result
+          in a failure outcome — i.e., < 5% error rate target.
+          Same service.name grouping as the Availability and Latency SLOs,
+          so a single Kibana SLO view covers all three quality signals
+          per service. Target: 95% (< 5% errors) over 7 days.
+        indicator:
+          type: sli.kql.custom
+          params:
+            index: "traces-apm.rum-default*,traces-*.otel-*"
+            filter: "processor.event:transaction"
+            good: "NOT event.outcome:failure"
+            total: "*"
+            timestampField: "@timestamp"
+        groupBy:
+          - service.name
+        budgetingMethod: occurrences
+        timeWindow:
+          duration: 7d
+          type: rolling
+        objective:
+          target: 0.95
+        tags:
+          - "__NS__"
+          - "azure-api"
+          - "otel"
+          - "challenge-1"
+
+# ── Step 6: AVD Session Reliability SLO ────────────────────────────────────
+# Challenge 3 — End-User Experience
+# Measures Azure Virtual Desktop session reliability by tracking AVD
+# reconnect events. A reconnect indicates session degradation — a field
+# engineer losing their desktop session counts as a bad event.
+# Answers "How is the machine functioning for the user?" with a hard SLO.
+  - name: create-slo-avd-reliability
+    type: kibana.request
+    with:
+      method: POST
+      path: /api/observability/slos
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        kbn-xsrf: "true"
+      body:
+        name: "__SCENARIO_NAME__ — AVD Session Reliability SLO"
+        description: >
+          End-User Experience SLO for __SCENARIO_NAME__ Azure Virtual Desktop.
+          Measures the fraction of AVD session events that do NOT indicate
+          a reconnect or disconnection. Each Midland field engineer reconnect
+          counts as a bad event in the error budget.
+          Grouped by host.name so per-device reliability is visible.
+          Target: 98% session reliability over a 7-day rolling window.
+          This SLO answers "How is the machine functioning for the user?"
+          with a measurable, time-bounded commitment — the question that
+          currently takes 45–90 minutes of cross-team Slack to answer.
+        indicator:
+          type: sli.kql.custom
+          params:
+            index: "logs*"
+            filter: "service.name:avd-broker AND event.category:session"
+            good: "NOT event.action:reconnect AND NOT event.action:disconnect"
+            total: "event.category:session"
+            timestampField: "@timestamp"
+        groupBy:
+          - host.name
+        budgetingMethod: occurrences
+        timeWindow:
+          duration: 7d
+          type: rolling
+        objective:
+          target: 0.98
+        tags:
+          - "__NS__"
+          - "avd"
+          - "end-user-experience"
+          - "challenge-3"
+
+# ── Step 7: Network Circuit Availability SLO ────────────────────────────────
+# Challenge 2 — SNMP Network Infrastructure
+# Measures Cisco WAN circuit availability using SNMP trap data.
+# A linkDown trap is a bad event; anything else (linkUp or no trap = healthy)
+# is a good event. Grouped by device.hostname so each Cisco switch has its
+# own circuit availability budget visible from the same Kibana SLO view
+# where APM and AVD SLOs live — the integration Exxon can't do today.
+  - name: create-slo-network-circuit
+    type: kibana.request
+    with:
+      method: POST
+      path: /api/observability/slos
+      headers:
+        Content-Type: application/json
+        Accept: application/json
+        kbn-xsrf: "true"
+      body:
+        name: "__SCENARIO_NAME__ — Network Circuit Availability SLO"
+        description: >
+          Network SLO for __SCENARIO_NAME__ Cisco WAN infrastructure.
+          Uses SNMP trap data ingested via the OTel snmpreceiver to measure
+          circuit availability. A linkDown trap event is counted as a bad
+          event in the error budget; linkUp and non-trap events are good.
+          Grouped by device.hostname so each Cisco switch (cisco-sw-houston-01,
+          cisco-sw-midland-01, cisco-sw-corpuschristi-01) has its own
+          availability budget — visible alongside APM and AVD SLOs in a
+          single Kibana SLO view. Replaces per-device OpenNMS polling with
+          an event-driven, budget-based reliability measure.
+          Target: 99% circuit availability over a 7-day rolling window.
+        indicator:
+          type: sli.kql.custom
+          params:
+            index: "logs*"
+            filter: "snmp.trap.type:* AND device.hostname:*"
+            good: "snmp.trap.type:linkUp"
+            total: "snmp.trap.type:*"
+            timestampField: "@timestamp"
+        groupBy:
+          - device.hostname
+          - network.site
+        budgetingMethod: occurrences
+        timeWindow:
+          duration: 7d
+          type: rolling
+        objective:
+          target: 0.99
+        tags:
+          - "__NS__"
+          - "snmp"
+          - "cisco"
+          - "network"
+          - "challenge-2"
+
+# ── Step 8: Summary ─────────────────────────────────────────────────────────
+  - name: workflow-complete
+    type: console
+    with:
+      message: |
+        ================================================
+        SLO Management and Service Evaluation — Complete
+        ================================================
+        5 SLOs created (idempotent run):
+
+          1. __SCENARIO_NAME__ — Azure API Availability SLO
+             Target: 95% | Window: 7d rolling | Grouped by: service.name
+             Challenge: 1 (OTel APM — replaces Datadog)
+
+          2. __SCENARIO_NAME__ — Azure API Latency SLO
+             Target: 85% under 2s | Window: 7d rolling | Grouped by: service.name
+             Challenge: 1 (OTel APM — replaces Datadog)
+
+          3. __SCENARIO_NAME__ — Azure API Error Rate SLO
+             Target: 95% (< 5% errors) | Window: 7d rolling | Grouped by: service.name
+             Challenge: 1 (OTel APM — replaces Datadog)
+
+          4. __SCENARIO_NAME__ — AVD Session Reliability SLO
+             Target: 98% | Window: 7d rolling | Grouped by: host.name
+             Challenge: 3 (EUX — answers "How is the machine functioning for the user?")
+
+          5. __SCENARIO_NAME__ — Network Circuit Availability SLO
+             Target: 99% | Window: 7d rolling | Grouped by: device.hostname + network.site
+             Challenge: 2 (SNMP — replaces OpenNMS per-device polling)
+
+        Navigate to: Observability → SLOs to view all five budgets.
+        ================================================
