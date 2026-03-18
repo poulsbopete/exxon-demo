@@ -6,8 +6,8 @@ description: |
   Runs every 24 hours. IDEMPOTENT: Deletes all existing __SCENARIO_NAME__ SLOs,
   then creates exactly 5 standard SLOs (no duplicates on re-run).
 
-  5 SLOs: Availability (95%), Latency (85% under 2s), Error Rate (95%),
-  AVD Session Reliability (98%), Network Circuit Availability (99%).
+  5 SLOs (relaxed demo targets): Availability 80%, Latency 80%, Error Rate 80%,
+  AVD Session Reliability 80%, Network Circuit Availability 25%.
   Uses environment-provided Kibana base URL + credentials (no hardcoded secrets).
 
 triggers:
@@ -40,7 +40,6 @@ steps:
     with:
       method: GET
       path: /api/observability/slos?perPage=500
-      timeout: "60"
       headers:
         Content-Type: application/json
         Accept: application/json
@@ -116,7 +115,7 @@ steps:
           duration: 7d
           type: rolling
         objective:
-          target: 0.95
+          target: 0.80
         tags:
           - "__NS__"
           - "azure-api"
@@ -160,7 +159,7 @@ steps:
           duration: 7d
           type: rolling
         objective:
-          target: 0.85
+          target: 0.80
         tags:
           - "__NS__"
           - "azure-api"
@@ -205,7 +204,7 @@ steps:
           duration: 7d
           type: rolling
         objective:
-          target: 0.95
+          target: 0.80
         tags:
           - "__NS__"
           - "azure-api"
@@ -254,7 +253,7 @@ steps:
           duration: 7d
           type: rolling
         objective:
-          target: 0.98
+          target: 0.80
         tags:
           - "__NS__"
           - "avd"
@@ -306,7 +305,7 @@ steps:
           duration: 7d
           type: rolling
         objective:
-          target: 0.99
+          target: 0.25
         tags:
           - "__NS__"
           - "snmp"
@@ -322,27 +321,18 @@ steps:
         ================================================
         SLO Management and Service Evaluation — Complete
         ================================================
-        5 SLOs created (idempotent run):
+        5 SLOs created (idempotent run, relaxed targets for demo):
 
           1. __SCENARIO_NAME__ — Azure API Availability SLO
-             Target: 95% | Window: 7d rolling | Grouped by: service.name
-             Challenge: 1 (OTel APM — replaces Datadog)
-
+             Target: 80% | Window: 7d rolling | Grouped by: service.name
           2. __SCENARIO_NAME__ — Azure API Latency SLO
-             Target: 85% under 2s | Window: 7d rolling | Grouped by: service.name
-             Challenge: 1 (OTel APM — replaces Datadog)
-
+             Target: 80% under 2s | Window: 7d rolling | Grouped by: service.name
           3. __SCENARIO_NAME__ — Azure API Error Rate SLO
-             Target: 95% (< 5% errors) | Window: 7d rolling | Grouped by: service.name
-             Challenge: 1 (OTel APM — replaces Datadog)
-
+             Target: 80% | Window: 7d rolling | Grouped by: service.name
           4. __SCENARIO_NAME__ — AVD Session Reliability SLO
-             Target: 98% | Window: 7d rolling | Grouped by: host.name
-             Challenge: 3 (EUX — answers "How is the machine functioning for the user?")
-
+             Target: 80% | Window: 7d rolling | Grouped by: host.name
           5. __SCENARIO_NAME__ — Network Circuit Availability SLO
-             Target: 99% | Window: 7d rolling | Grouped by: device.hostname + network.site
-             Challenge: 2 (SNMP — replaces OpenNMS per-device polling)
+             Target: 25% | Window: 7d rolling | Grouped by: device.hostname + network.site
 
         Navigate to: Observability → SLOs to view all five budgets.
         ================================================

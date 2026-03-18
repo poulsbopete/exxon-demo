@@ -167,21 +167,21 @@ class ExxonScenario(BaseScenario):
                 "remediation_action": "Switch OTLP exporter URL from Datadog endpoint to Elastic Serverless OTLP endpoint. No pipeline config required.",
             },
             2: {
-                "name": "OTel Collector Orphaned — Nobody Owns It",
+                "name": "OTel Exporter — No Working Backend",
                 "subsystem": "api",
                 "error_type": "config_drift",
                 "affected_services": ["api-gateway", "payment-processor"],
                 "cascade_services": ["openshift-operator"],
                 "description": (
-                    "The OTel collector config was last updated 6 months ago and "
-                    "is pointing at a decommissioned Datadog endpoint. Traces from "
-                    "payment-processor are not reaching any backend. "
-                    "'Nobody knows what to do with OpenTelemetry.'"
+                    "The OTel collector config points at a Datadog endpoint that "
+                    "is no longer valid. Traces from payment-processor are not "
+                    "reaching any backend. OpenTelemetry is not heavily utilized; "
+                    "redirecting to Elastic Serverless OTLP would unify signals in one place."
                 ),
                 "log_messages": [
                     "ERROR otelcol/exporter/datadog - Export failed: 401 Unauthorized (API key revoked)",
                     "WARN  otelcol/exporter/datadog - Dropping 12,450 spans — exporter queue overflow",
-                    "ERROR PaymentProcessor - Trace context lost: no active span (orphaned collector)",
+                    "ERROR PaymentProcessor - Trace context lost: no active span (exporter unreachable)",
                     "ERROR otelcol/receiver/otlp  - Buffer full: rejecting new spans from payment-processor",
                     "WARN  otelcol/processor/batch - Batch timeout exceeded; flushing partial batch",
                 ],

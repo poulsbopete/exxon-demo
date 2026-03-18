@@ -1,19 +1,23 @@
-slug: elastic-exxon-serverless-observability
+slug: elastic-exxon-serverless-observability-v2
 id: bbby8mbhhtq8
 title: 'Elastic Serverless for Exxon: Infrastructure 2.0 Unified Observability'
-teaser: Consolidate Datadog, Splunk, OpenNMS, and ThousandEyes into one Elastic Serverless
-  platform — from OTel-instrumented Azure API services and OpenShift Kubernetes all
-  the way to legacy SNMP traps and end-user desktop experience monitoring.
+teaser: Consolidate Datadog, Splunk, OpenNMS, and ThousandEyes into one Elastic
+  Serverless platform — 1,500+ applications and 1,000+ Azure services, from
+  OTel and Azure Insights to legacy SNMP and end-user experience monitoring.
 description: |-
   ## The Challenge
 
-  Exxon's observability landscape is fragmented across four tools — Datadog
-  (metrics & APM), Splunk (application logs), OpenNMS (network monitoring),
-  and ThousandEyes on Cisco switches — with no single view of how the
-  environment affects end users. Log pipelines in Datadog are failing to
-  create, 1,000+ Azure API service instances produce "messy" APM data that
-  nobody knows how to act on, and SNMP traps from legacy Cisco infrastructure
-  are isolated from modern OpenShift/Kubernetes metrics.
+  ExxonMobil instruments more than 1,500 applications and more than 1,000
+  Azure services. Azure-based service owners rely on Azure Insights; server
+  and container insights come largely from the Datadog Agent; APM agents are
+  in use with varying success. The observability landscape is fragmented
+  across Datadog, Splunk, OpenNMS, and ThousandEyes with no single view.
+  Logging pipelines are not well-defined; SDOs do not consistently leverage
+  tags across metrics, logs, monitors, or events. OpenTelemetry is not
+  heavily utilized today; Elastic Serverless accepts OTLP natively so any
+  OTLP-capable source (including Azure where applicable) can be collected
+  in one place. SNMP traps from legacy Cisco infrastructure remain isolated
+  from modern APM and logs.
 
   ## What You Will Build
 
@@ -37,7 +41,7 @@ tags:
 - end-user-experience
 - observability
 - apm
-owner: elastic
+owner: psimkins
 developers:
 - peter.simkins@elastic.co
 idle_timeout: 600
@@ -48,5 +52,5 @@ lab_config:
   feedback_tab_enabled: false
   loadingMessages: true
   hideStopButton: false
-checksum: "4814391361873854432"
+checksum: "3831934489886927063"
 enhanced_loading: false

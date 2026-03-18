@@ -51,9 +51,11 @@ exxon-demo/
 
 ### Challenge 1: Unifying Modern APM and Logs with OTel (~15 min)
 
-**Narrative:** Exxon's 1,000+ Azure API service instances emit traces into
-Datadog and logs into Splunk — two tools with no common service identity.
-OTel configs are "orphaned — nobody knows what to do."
+**Narrative:** ExxonMobil instruments more than 1,500 applications and more
+than 1,000 Azure services. Azure owners use Azure Insights; server/container
+insights come from the Datadog Agent; APM agents are in use with varying
+success. OpenTelemetry is not heavily utilized today; Elastic Serverless
+accepts OTLP natively so any OTLP-capable source can be collected in one place.
 
 **What happens in the sandbox:**
 - A mock Elastic OTLP endpoint starts on `localhost:8200`
@@ -130,7 +132,7 @@ exist and that `investigate.py` produces a non-UNKNOWN root cause.
 > "Exxon, you've described your environment as 'very disjointed.' You have
 > Datadog for APM, Splunk for application logs, OpenNMS for SNMP network
 > events, and ThousandEyes on your Cisco switches — four tools, four teams,
-> four bills, and log pipelines in Datadog that are failing to create.
+> four bills. Logging pipelines are not well-defined and SDOs don't consistently leverage tags across metrics, logs, and monitors.
 >
 > What I'm going to show you today is what your Infrastructure 2.0 world
 > looks like when all of that lands in a single Elastic Serverless project.
@@ -143,7 +145,7 @@ exist and that `investigate.py` produces a non-UNKNOWN root cause.
 > with container metrics from OpenShift — using the same `service.name`
 > tag the OTel collector already sets. This is the view your app team
 > has never had. And notice: we didn't write a single Logstash pipeline.
-> We changed one URL in the OTel collector config."
+> We point OTel or existing collectors at one Elastic OTLP endpoint."
 
 ### After Challenge 2
 

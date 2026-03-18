@@ -162,6 +162,7 @@
     /* ── Typography helpers ────────────────────────────────────────── */
     .slide h2 { font-size: 1.8em; font-weight: 700; color: #fff; margin: 0 0 28px; }
     .slide h3 { font-size: 1.2em; font-weight: 600; color: #ddd; margin: 0 0 16px; }
+    .slide .lead { font-size: 1.05em; color: #ccc; line-height: 1.5; }
     .eyebrow-sm {
       font-size: 0.65em;
       text-transform: uppercase;
@@ -374,7 +375,27 @@
 </section>
 
 <!-- ════════════════════════════════════════════════════════════════
-     SLIDE 2 — THE PROBLEM (EXEC)
+     SLIDE 2 — SCALE AT EXXONMOBIL
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">Context</span>
+    <h2>Scale at ExxonMobil</h2>
+    <p class="lead" style="max-width:90%; margin-bottom:24px;">
+      ExxonMobil instruments <strong>more than 1,500 applications</strong>, with
+      <strong>more than 1,000 Azure services</strong>.
+    </p>
+    <ul class="pain-list" style="max-width:90%;">
+      <li><span class="icon">📊</span><div><span class="label">Azure</span> — Azure-based service owners rely predominantly on <strong>Azure Insights</strong> for monitoring.</div></li>
+      <li><span class="icon">🖥️</span><div><span class="label">Servers &amp; containers</span> — Application insights tend to come from data collected by the <strong>Datadog Agent</strong>.</div></li>
+      <li><span class="icon">🔌</span><div><span class="label">APM agents</span> — In use across the estate, but with <strong>varying degrees of success</strong>.</div></li>
+    </ul>
+    <div class="slide-footer"><span>Context</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 3 — THE PROBLEM (EXEC)
      ════════════════════════════════════════════════════════════════ -->
 <section>
   <div class="slide">
@@ -384,7 +405,7 @@
       <div class="card red-border">
         <div class="card-icon">📊</div>
         <div class="card-title">Datadog</div>
-        <div class="card-body">APM traces for Azure API services — but log pipelines fail to create</div>
+        <div class="card-body">APM and agent-based monitoring — alongside Azure Insights and other tools</div>
       </div>
       <div class="card red-border">
         <div class="card-icon">🔍</div>
@@ -425,7 +446,7 @@
 </section>
 
 <!-- ════════════════════════════════════════════════════════════════
-     SLIDE 3 — PAIN POINTS
+     SLIDE 4 — PAIN POINTS (TAGGING, SDOs, OTEL)
      ════════════════════════════════════════════════════════════════ -->
 <section>
   <div class="slide">
@@ -434,13 +455,15 @@
     <ul class="pain-list">
       <li>
         <span class="icon">🔴</span>
-        <div><span class="label">Messy APM</span> — Log pipeline creation fails in Datadog; traces land but application logs are dropped.
-        4,821 log records lost per incident.</div>
+        <div><span class="label">Logging &amp; tags</span> — Logging pipelines are not well-defined. Service delivery organizations (SDOs) do not effectively leverage tags across metrics, logs, monitors, or events. Some tags are thought to be &quot;product specific&quot; (e.g. <code>service</code>, often explained as mainly for APM).</div>
       </li>
       <li>
         <span class="icon">🔴</span>
-        <div><span class="label">"Nobody knows what to do with OpenTelemetry"</span> — OTel collector configs are orphaned,
-        pointing at a decommissioned Datadog endpoint. 12,450 spans dropped. Last working: 200+ days ago.</div>
+        <div><span class="label">Tagging strategy vs. implementation</span> — ExxonMobil has an internal tagging strategy, but it is up to SDOs to implement it — and not all SDOs understand or apply it consistently.</div>
+      </li>
+      <li>
+        <span class="icon">🔴</span>
+        <div><span class="label">OpenTelemetry</span> — OpenTelemetry is not heavily utilized at ExxonMobil; most organizations focus on Datadog Agent, APM, or logs. <strong>Elastic Serverless accepts OTLP natively</strong> — if Azure or other sources can emit OTLP, it can be collected easily in one place.</div>
       </li>
       <li>
         <span class="icon">🔴</span>
@@ -459,7 +482,7 @@
 </section>
 
 <!-- ════════════════════════════════════════════════════════════════
-     SLIDE 4 — THE PLATFORM
+     SLIDE 5 — THE PLATFORM
      ════════════════════════════════════════════════════════════════ -->
 <section>
   <div class="slide">
@@ -520,7 +543,7 @@
     <div class="section-num">01</div>
     <div class="section-label">Challenge</div>
     <div class="section-title">Unifying Modern APM and Logs with OTel</div>
-    <div class="section-sub">From orphaned OTel configs to a unified traces + metrics + logs stream</div>
+    <div class="section-sub">Native OTLP to a unified traces + metrics + logs stream</div>
   </div>
 </section>
 
@@ -534,14 +557,14 @@
     <div class="two-col-60">
       <div>
         <div class="card red-border" style="margin-bottom: 14px;">
-          <div class="card-title">❌ Before — Orphaned OTel Config</div>
+          <div class="card-title">❌ Before — Fragmented Exporters</div>
           <div class="code-block" style="margin-top:10px;">
-<span class="code-comment"># Last updated 200+ days ago</span><br>
+<span class="code-comment"># Multiple backends, no single OTLP destination</span><br>
 <span class="code-key">exporters:</span><br>
 &nbsp;&nbsp;<span class="code-key">datadog/exporter:</span><br>
 &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-key">api:</span><br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-key">key:</span> <span class="code-val">"&lt;revoked&gt;"</span> <span class="code-comment"># 401 errors</span><br>
-<span class="code-comment"># 12,450 spans dropped. Nobody owns this.</span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="code-key">key:</span> <span class="code-val">"&lt;key&gt;"</span><br>
+&nbsp;&nbsp;<span class="code-key">splunk_hec:</span> <span class="code-comment"># separate pipeline, different tags</span>
           </div>
         </div>
         <div class="card teal-border">
@@ -768,7 +791,7 @@
         </tr>
         <tr>
           <td class="col-metric">OTel pipeline ownership</td>
-          <td class="col-before">Orphaned configs, 200 days without working export, "nobody owns it"</td>
+          <td class="col-before">OTel not heavily utilized; multiple backends (Datadog, Splunk), no single OTLP destination</td>
           <td class="col-after">Change one endpoint URL. Elastic manages the collector backend.</td>
         </tr>
         <tr>
@@ -798,7 +821,25 @@
 </section>
 
 <!-- ════════════════════════════════════════════════════════════════
-     SLIDE 13 — COST & TIME TO VALUE
+     SLIDE 13 — SLO & BURN RATE (FOCUS FOR EXXON)
+     ════════════════════════════════════════════════════════════════ -->
+<section>
+  <div class="slide">
+    <span class="eyebrow-sm">Focus: Monitoring &amp; Alerting</span>
+    <h2>SLO &amp; Burn Rate — How We Use It</h2>
+    <p class="lead" style="margin-bottom:20px;">In Datadog the relationship between SLOs and monitors is bidirectional and ambiguous; Elastic is more deliberate, with clear burn rate windows and action groups.</p>
+    <ul class="pain-list" style="max-width:92%;">
+      <li><span class="icon">📐</span><div><span class="label">How is burn rate measured?</span> — We want to understand how burn rate is determined in Elastic (windows, thresholds) so we can align with how monitoring should be set up.</div></li>
+      <li><span class="icon">🎯</span><div><span class="label">Tactical alerting</span> — Use burn rate on an SLO with a <strong>group-by field</strong> (e.g. <code>Site code</code>) to detect multiple sites with the same issue — a &quot;storm&quot; — and alert operations.</div></li>
+      <li><span class="icon">📢</span><div><span class="label">Management alerting</span> — Use <strong>SLO violations</strong> to alert management organizations, so leadership sees when commitments are at risk.</div></li>
+    </ul>
+    <p class="muted" style="font-size:0.85em; margin-top:16px;">Elastic offers more options for burn rate windows, action groups, and a clear SLO → rule relationship.</p>
+    <div class="slide-footer"><span>SLO &amp; Burn Rate</span></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════════════════
+     SLIDE 14 — COST & TIME TO VALUE
      ════════════════════════════════════════════════════════════════ -->
 <section>
   <div class="slide">
@@ -835,7 +876,7 @@
             <div class="card-grid card-grid-2" style="gap:0;">
               <div style="padding-right:20px; border-right:1px solid var(--border);">
                 <div class="card-num" style="color:var(--exxon-red);">1,000<span style="font-size:0.4em;color:var(--text-muted);">+</span></div>
-                <div class="card-label">Azure API instances monitored today (partial)</div>
+                <div class="card-label">Azure services monitored today (partial)</div>
               </div>
               <div style="padding-left:20px;">
                 <div class="card-num" style="color:var(--elastic-teal);">All</div>
@@ -875,17 +916,18 @@
 </section>
 
 <!-- ════════════════════════════════════════════════════════════════
-     SLIDE 14 — DEMO CTA
+     SLIDE 15 — DEMO CTA
      ════════════════════════════════════════════════════════════════ -->
 <section>
   <div class="slide slide-title">
     <div class="eyebrow">Ready to See It Live?</div>
     <h1>Let's Run the <span>Demo</span></h1>
     <div class="sub" style="margin-bottom:24px;">Instruqt-hosted · No setup required · 90-minute session</div>
+    <p class="muted" style="font-size:0.8em; max-width:560px; margin-bottom:20px;">This UI is the <strong>Observability</strong> project in Elastic Serverless. Logs, metrics, traces, and APM all live here: use <strong>Observability → Logs</strong> (Discover, Log Streams), <strong>APM</strong>, and <strong>Dashboards</strong> in the left nav.</p>
     <div class="card-grid card-grid-3" style="max-width:900px; text-align:left; margin-bottom:28px;">
       <div class="card teal-border">
         <div class="card-title">Challenge 1</div>
-        <div class="card-body">OTel unification — watch 1,000+ Azure API instances land in a single dashboard</div>
+        <div class="card-body">OTel unification — 1,500+ applications and 1,000+ Azure services in a single dashboard</div>
       </div>
       <div class="card teal-border">
         <div class="card-title">Challenge 2</div>

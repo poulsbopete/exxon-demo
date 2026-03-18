@@ -299,8 +299,8 @@ top — the exact services impacted by the Midland MPLS + AppGate fault chain.
 
 You have now completed all three challenges:
 
-1. **OTel Unified APM** — Replaced Datadog APM + Splunk log pipelines with
-   native OTel ingest. All 1,000+ Azure API service instances visible in one
+1. **OTel Unified APM** — Replaced fragmented pipelines with native OTel
+   ingest. 1,500+ applications and 1,000+ Azure services visible in one
    ES|QL query.
 
 2. **SNMP Network Integration** — Brought Cisco WAN events out of OpenNMS and

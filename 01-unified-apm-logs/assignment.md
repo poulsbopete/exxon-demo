@@ -3,22 +3,29 @@ slug: unified-apm-logs
 id: 5las0ca0droc
 type: challenge
 title: 'Challenge 1: Unifying Modern APM and Logs with OTel'
-teaser: Replace fragmented Datadog/Splunk pipelines with native OpenTelemetry ingest
-  into Elastic Serverless — bridging 1,000+ Azure API service instances and OpenShift
-  Kubernetes in one query.
+teaser: Replace fragmented pipelines with native OpenTelemetry ingest into
+  Elastic Serverless — bridging 1,500+ applications and 1,000+ Azure services
+  in one query.
 notes:
 - type: text
   contents: |
-    Exxon runs **1,000+ application instances** in Azure API Services, each
-    emitting traces and metrics. Today these land in Datadog (traces) and
-    Splunk (logs) — two tools with no common service identity.
+    ExxonMobil instruments **more than 1,500 applications**, with **more than
+    1,000 Azure services**. Azure-based service owners rely predominantly on
+    **Azure Insights** for monitoring; server or container-based application
+    insights tend to come from data collected by the **Datadog Agent**. APM
+    agents are in use but with **varying degrees of success**.
 
-    Log pipelines in Datadog are **failing to create**, and the OTel
-    collector configurations that were meant to fix this are orphaned —
-    "nobody knows what to do with OpenTelemetry."
+    **Logging pipelines** are not well-defined, and service delivery
+    organizations (SDOs) do not effectively leverage **tags** across metrics,
+    logs, monitors, or events. Some tags are thought to be "product specific"
+    (e.g. **service**, often explained as mainly for APM). ExxonMobil has an
+    internal tagging strategy, but it is up to SDOs to implement — and not all
+    SDOs understand it.
 
-    Elastic Serverless accepts **OTLP natively** — no APM Server to deploy,
-    no Logstash pipeline to write. Elastic manages the collector backend for you.
+    **OpenTelemetry** is not heavily utilized at ExxonMobil; most organizations
+    focus on Datadog Agent, APM, or logs. **Elastic Serverless accepts OTLP
+    natively** — if Azure or other sources can emit OTLP, it can be collected
+    easily in one place. No APM Server to deploy, no Logstash pipeline to write.
 - type: text
   contents: |
     **Elastic Serverless has a managed OTLP ingest endpoint.**
@@ -34,7 +41,7 @@ notes:
     signals automatically — traces, metrics, and logs in one stream.
 - type: text
   contents: |
-    **Exxon's orphaned OTel configs — fixed with one line change.**
+    **Exxon's OTel or multi-backend configs — unified with one endpoint change.**
 
     ```yaml
     exporters:
@@ -58,8 +65,8 @@ notes:
     | Collector backend to operate | Yes | Yes | **No — Elastic manages it** |
     | Runs on OpenShift | Limited | Limited | Yes |
 
-    Exxon's existing OTel configs — currently orphaned — can be pointed at
-    Elastic Serverless with **a single endpoint URL change**.
+    Existing OTel or collector configs can be pointed at Elastic Serverless
+    with **a single endpoint URL change**.
 tabs:
 - id: 5hcn3kt9phei
   title: Demo App
@@ -106,8 +113,8 @@ If the status hasn't appeared yet, click the **Test Connection** button once.
 managed OTLP ingest endpoint is live and accepting telemetry — no APM Server
 to deploy, no OTel Collector backend to configure on Elastic's side.
 
-Exxon's orphaned OTel collectors just need their `endpoint:` URL updated.
-That's it.
+Existing OTel or collector configs just need their `endpoint:` URL updated to
+the Elastic Serverless OTLP ingest URL. That's it.
 
 ---
 
@@ -139,6 +146,10 @@ all 12 steps completing in real time:
 
 Once the Deployment Progress panel shows all green checkmarks, switch to the
 **Elastic Serverless** tab.
+
+> **UI note:** This is the **Observability** project in Elastic Serverless.
+> Logs, metrics, traces, and APM all live here. Use **Observability → Logs**
+> (Discover, Log Streams), **APM**, and **Dashboards** in the left nav — nothing is hidden; it's one Observability surface.
 
 ### Dashboard
 
@@ -189,6 +200,10 @@ the Wired Streams automatically routing OTLP signals — look for:
 
 Click any stream → **"Query with ES|QL"** to explore live telemetry.
 
+### Infrastructure inventory (why it may show "No data")
+
+The **Infrastructure** → **Infrastructure inventory** view in Kibana is built to show hosts and containers when data is sent via **Elastic Agent** with the System or Kubernetes integration. This demo uses **OTLP-only** ingest (no Agent), so that view often shows "There is no data to display" and "No schema available." The same infrastructure metrics *are* present in **Metrics Explorer** and in the **Executive Dashboard** (Node CPU, Node Memory, K8s metrics). Use **Discover** or **Metrics Explorer** with the `metrics-*` data view to query host and Kubernetes metrics from this demo.
+
 ---
 
 ## Why This Matters for Exxon
@@ -197,7 +212,7 @@ Click any stream → **"Query with ES|QL"** to explore live telemetry.
 |---|---|
 | Separate APM and log searches across 2 UIs | One ES\|QL query across traces, metrics, and logs |
 | Log pipeline creation failing in Datadog | No pipeline code — OTLP accepted natively |
-| OTel configs orphaned — nobody owns the backend | One endpoint URL. Elastic manages the collector. |
+| OTel not heavily utilized; multiple backends, no single OTLP destination | One endpoint URL. Elastic manages the collector. |
 | Datadog + Splunk storage bills | Single Elastic Serverless project, one bill |
 
 > Continue to **Challenge 2** to bring in the legacy Cisco SNMP network layer.
