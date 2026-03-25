@@ -35,11 +35,16 @@
       background: var(--bg-dark);
       overflow: hidden;
     }
+    .reveal,
+    .reveal-viewport {
+      background: transparent !important;
+    }
     .reveal {
       position: fixed !important;
       top: 0 !important; left: 0 !important;
       width: 100vw !important;
       height: 100vh !important;
+      z-index: 1;
     }
     .reveal .slides {
       text-align: left;
@@ -360,10 +365,6 @@
       z-index: 0;
       pointer-events: none;
       display: block;
-    }
-    .reveal {
-      position: relative;
-      z-index: 1;
     }
     /* Let the animated background show through slightly */
     .slide {
