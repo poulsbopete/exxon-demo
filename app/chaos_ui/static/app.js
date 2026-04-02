@@ -172,10 +172,8 @@
         // INJECT: always enabled for STANDBY channels
         btnInject.disabled = ch.state === 'ACTIVE';
 
-        // RESOLVE: only enabled if channel is ACTIVE and we own it
-        const sid = getSessionId();
-        const isMine = sid && ch.session_id === sid;
-        btnResolve.disabled = ch.state !== 'ACTIVE' || !isMine;
+        // RESOLVE: enabled for any ACTIVE channel (uses force-resolve endpoint)
+        btnResolve.disabled = ch.state !== 'ACTIVE';
     }
 
     // ── Trigger / Resolve ─────────────────────────────────────
@@ -214,26 +212,14 @@
 
     window.resolveFault = function () {
         if (!selectedChannel) return;
-        const sid = getSessionId();
+        const params = deployId ? `?deployment_id=${encodeURIComponent(deployId)}` : '';
 
-        fetch('/api/chaos/resolve', {
+        fetch(`/api/remediate/${selectedChannel}${params}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                channel: selectedChannel,
-                session_id: sid || '',
-                deployment_id: deployId || undefined,
-            }),
         })
-            .then(r => {
-                if (r.status === 403) {
-                    r.json().then(d => console.warn('Session mismatch:', d));
-                    return null;
-                }
-                return r.json();
-            })
+            .then(r => r.json())
             .then(result => {
-                if (!result) return;
                 if (result.status === 'resolved') {
                     myOwnedChannels.delete(selectedChannel);
                     if (myOwnedChannels.size === 0) clearSession();
@@ -245,26 +231,14 @@
     };
 
     window.resolveChannel = function (channel) {
-        const sid = getSessionId();
+        const params = deployId ? `?deployment_id=${encodeURIComponent(deployId)}` : '';
 
-        fetch('/api/chaos/resolve', {
+        fetch(`/api/remediate/${channel}${params}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                channel: channel,
-                session_id: sid || '',
-                deployment_id: deployId || undefined,
-            }),
         })
-            .then(r => {
-                if (r.status === 403) {
-                    r.json().then(d => console.warn('Session mismatch:', d));
-                    return null;
-                }
-                return r.json();
-            })
+            .then(r => r.json())
             .then(result => {
-                if (!result) return;
                 if (result.status === 'resolved') {
                     myOwnedChannels.delete(channel);
                     if (myOwnedChannels.size === 0) clearSession();
@@ -283,8 +257,6 @@
             .filter(id => data[id].state === 'ACTIVE')
             .sort((a, b) => a - b);
 
-        const sid = getSessionId();
-
         if (activeIds.length === 0) {
             container.innerHTML = '<div class="no-active">No active faults</div>';
         } else {
@@ -297,13 +269,7 @@
                 const remaining = Math.max(0, MAX_DURATION - elapsed);
                 const remMins = Math.floor(remaining / 60);
                 const remSecs = remaining % 60;
-                const isMine = sid && ch.session_id === sid;
-                const ownerTag = !isMine && ch.session_id
-                    ? '<div class="ac-owner-tag">CONTROLLED BY ANOTHER OPERATOR</div>'
-                    : '';
-                const resolveBtn = isMine
-                    ? `<button class="ac-resolve-btn" onclick="resolveChannel(${id})">RESOLVE</button>`
-                    : `<button class="ac-resolve-btn" disabled>RESOLVE</button>`;
+                const resolveBtn = `<button class="ac-resolve-btn" onclick="resolveChannel(${id})">RESOLVE</button>`;
                 return `
                     <div class="active-channel-card">
                         <div class="ac-header">
