@@ -176,6 +176,28 @@
         btnResolve.disabled = ch.state !== 'ACTIVE';
     }
 
+    // ── Status toast ──────────────────────────────────────────
+    function showToast(msg, isError) {
+        let toast = document.getElementById('chaos-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'chaos-toast';
+            toast.style.cssText = [
+                'position:fixed', 'bottom:24px', 'left:50%', 'transform:translateX(-50%)',
+                'padding:12px 24px', 'border-radius:8px', 'font-family:Space Mono,monospace',
+                'font-size:13px', 'letter-spacing:1px', 'z-index:9999',
+                'transition:opacity 0.4s', 'pointer-events:none',
+            ].join(';');
+            document.body.appendChild(toast);
+        }
+        toast.textContent = msg;
+        toast.style.background = isError ? 'rgba(180,0,0,0.92)' : 'rgba(0,150,50,0.92)';
+        toast.style.color = '#fff';
+        toast.style.opacity = '1';
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 3500);
+    }
+
     // ── Trigger / Resolve ─────────────────────────────────────
     window.triggerFault = function () {
         if (!selectedChannel) return;
@@ -185,6 +207,11 @@
 
         // Generate session_id if we don't have one yet
         const sid = getSessionId() || generateSessionId();
+
+        const btn = document.getElementById('btn-inject');
+        const origText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'INJECTING…';
 
         fetch('/api/chaos/trigger', {
             method: 'POST',
@@ -199,20 +226,38 @@
                 deployment_id: deployId || undefined,
             }),
         })
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) return r.json().then(d => { throw new Error(d.error || `HTTP ${r.status}`); });
+                return r.json();
+            })
             .then(result => {
                 if (result.status === 'triggered') {
                     myOwnedChannels.add(selectedChannel);
                     updateSpikesLock();
+                    showToast(`✓ CH-${String(selectedChannel).padStart(2,'0')} fault injected`, false);
+                } else if (result.status === 'already_active') {
+                    showToast(`CH-${String(selectedChannel).padStart(2,'0')} already active`, true);
+                } else {
+                    showToast(result.error || result.status || 'Trigger failed', true);
                 }
                 fetchStatus();
             })
-            .catch(e => console.error('Trigger failed:', e));
+            .catch(e => {
+                showToast(`Trigger failed: ${e.message}`, true);
+                console.error('Trigger failed:', e);
+            })
+            .finally(() => {
+                btn.textContent = origText;
+                btn.disabled = false;
+            });
     };
 
     window.resolveFault = function () {
         if (!selectedChannel) return;
         const params = deployId ? `?deployment_id=${encodeURIComponent(deployId)}` : '';
+
+        const btn = document.getElementById('btn-resolve');
+        btn.disabled = true;
 
         fetch(`/api/remediate/${selectedChannel}${params}`, {
             method: 'POST',
@@ -223,11 +268,18 @@
                 if (result.status === 'resolved') {
                     myOwnedChannels.delete(selectedChannel);
                     if (myOwnedChannels.size === 0) clearSession();
+                    showToast(`✓ CH-${String(selectedChannel).padStart(2,'0')} resolved`, false);
+                } else {
+                    showToast(result.error || result.status || 'Resolve failed', true);
                 }
                 fetchStatus();
                 refreshSpikes();
             })
-            .catch(e => console.error('Resolve failed:', e));
+            .catch(e => {
+                showToast(`Resolve failed: ${e.message}`, true);
+                console.error('Resolve failed:', e);
+            })
+            .finally(() => { btn.disabled = false; });
     };
 
     window.resolveChannel = function (channel) {
